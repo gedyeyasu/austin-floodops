@@ -43,6 +43,7 @@ def decision() -> IncidentDecision:
 
 def test_json_extraction_handles_fenced_output():
     assert _extract_json("```json\n{\"risk_level\": \"high\"}\n```")["risk_level"] == "high"
+    assert _extract_json("<think>private reasoning</think>{\"risk_level\": \"moderate\"}")["risk_level"] == "moderate"
 
 
 def test_missing_nvidia_key_is_fail_closed():
