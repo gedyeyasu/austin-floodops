@@ -24,9 +24,10 @@ policy-v1 sections (`filesystem_policy`, `landlock`, `process`, and
 The deployment decision is explicit: Supabase is the managed ledger and
 Realtime surface, not the application runtime. The API/agent runs in a
 NemoClaw/OpenShell container (Brev is the preferred NVIDIA-hosted path), with
-SQLite retained for offline replay. `supabase/schema.sql` is the first
-database migration; the Supabase gate stays unverified until one real event
-and one decision are written and read back with server-side credentials.
+SQLite retained for offline replay. `supabase/schema.sql` is mirrored under
+`supabase/migrations/` for the linked GitHub deployment; the Supabase gate
+stays unverified until one real event and one decision are written and read
+back with server-side credentials.
 Hackathon: AITX Community x NVIDIA Claw Agent Hackathon, July 17-19, 2026
 Primary track: Red Hat Live Data
 Secondary qualification targets: Recursive Intelligence, HiddenLayer Runtime Security, Best Use of vLLM, Best Use of NemoClaw + OpenShell, Best Use of Nemotron, Most Commercializable Hack
