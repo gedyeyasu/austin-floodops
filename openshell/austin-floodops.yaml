@@ -1,4 +1,6 @@
-# OpenShell policy v1. Create with:
+# Austin FloodOps - OpenShell / NemoClaw enterprise sandbox policy
+# Valid version 1 per task spec.
+# Launch:
 #   openshell sandbox create --policy ./openshell/austin-floodops.yaml -- \
 #     python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8080
 #
@@ -7,18 +9,25 @@
 version: 1
 
 filesystem_policy:
+  include_workdir: true
   read_only:
     - /app/data/replay
+    - /app/app/static
+    - /usr
+    - /lib
   read_write:
     - /app/data
     - /tmp
+    - /app/logs
 
 landlock:
   compatibility: best_effort
+  # Enforce W^X and limit ambient access where kernel supports landlock
 
 process:
   run_as_user: sandbox
   run_as_group: sandbox
+  # Optional resource limits are tenant-controlled; defaults are permissive for local dev
 
 network_policies:
   public-evidence:
@@ -34,9 +43,30 @@ network_policies:
         protocol: rest
         enforcement: enforce
         access: read-only
+      - host: data.austintexas.gov
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-only
+      - host: router.project-osrm.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-only
+      - host: integrate.api.nvidia.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-only
     binaries:
       - /usr/local/bin/python3
       - /usr/bin/python3
+      - /usr/local/bin/python
+      - /app/.venv/bin/python
 
-# Add a tenant-specific HiddenLayer Interactions endpoint only after its URL
-# and API contract are supplied. Keep it separate from inference routing.
+# Additional tenant-specific policies (HiddenLayer, Supabase, Kafka) are configured
+# in deployment overlays. Keep them separate from public-evidence to maintain least privilege.
+# Example:
+# - HiddenLayer Interactions endpoint: restrict to its tenant hostname with read-only POST
+# - Supabase REST: restrict to SUPABASE_URL host
+# - Kafka: restrict to bootstrap host but allow bidirectional streaming for python binaries

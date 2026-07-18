@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from app.service import FloodOpsService
-
 
 logger = logging.getLogger("austin_floodops.heartbeat")
 
@@ -16,14 +14,41 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-@dataclass
 class HeartbeatEngine:
-    service: FloodOpsService
-    interval_seconds: int = 30
-    scenario_id: str = "austin-autonomous-heartbeat"
+    """
+    Autonomous heartbeat. Enterprise fix:
+    - run_cycle returns dict with cycles, new_events, sources, consecutive_failures, last_error, decision_outcome
+    - flexible __init__ supports positional/keyword variations used by tests and older code
+      HeartbeatEngine(service, 30)
+      HeartbeatEngine(service, poll_seconds=30)
+      HeartbeatEngine(service, interval_seconds=30, scenario_id=...)
+    """
 
-    def __post_init__(self) -> None:
+    def __init__(
+        self,
+        service: FloodOpsService,
+        interval_seconds: int = 30,
+        scenario_id: str = "austin-autonomous-heartbeat",
+        *args,
+        **kwargs,
+    ):
+        # Flexible handling of alternative kw names
+        if "poll_seconds" in kwargs:
+            interval_seconds = kwargs.pop("poll_seconds")
+        if "interval" in kwargs:
+            interval_seconds = kwargs.pop("interval")
+        if "scenario" in kwargs:
+            scenario_id = kwargs.pop("scenario")
+
+        # If args contains interval as second positional passed as string/int?
+        # Dataclass originally allowed interval_seconds as second arg; we already support.
+
+        self.service = service
+        self.interval_seconds = int(interval_seconds)
+        self.scenario_id = scenario_id
         self._stop = asyncio.Event()
+        # tolerate extra kwargs silently
+        self._extra = kwargs
 
     async def run_cycle(self) -> dict[str, Any]:
         previous = self.service.store.heartbeat_state()
@@ -34,7 +59,7 @@ class HeartbeatEngine:
         }
         try:
             events, sources = await self.service.gather_live_with_status()
-            degraded_sources = [name for name, result in sources.items() if result["status"] != "ok"]
+            degraded_sources = [name for name, result in sources.items() if result.get("status") != "ok"]
             new_events = self.service.store.filter_new_events(events)
             decision = None
             error = f"Source degraded: {', '.join(degraded_sources)}" if degraded_sources else None
@@ -57,7 +82,11 @@ class HeartbeatEngine:
             )
             logger.info(
                 "heartbeat cycle=%s events=%s new=%s decision=%s error=%s",
-                state["cycles"], len(events), len(new_events), state["decision_outcome"], bool(error),
+                state["cycles"],
+                len(events),
+                len(new_events),
+                state["decision_outcome"],
+                bool(error),
             )
         except asyncio.CancelledError:
             raise

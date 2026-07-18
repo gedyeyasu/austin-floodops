@@ -1,0 +1,67 @@
+version: "3.9"
+# Austin FloodOps local stack
+# - app: FastAPI + Heartbeat + dashboard (port 8080)
+# - redpanda: Kafka-compatible broker for Red Hat Streams track local testing
+#   Production Red Hat Streams uses SASL_SSL; for local dev we use redpanda:29092 internal, localhost:19092 external
+#   To test real Red Hat Streams, set KAFKA_BOOTSTRAP_SERVERS, KAFKA_SECURITY_PROTOCOL=SASL_SSL, etc in .env
+#
+# Usage:
+#   docker-compose up --build
+#   Then open http://127.0.0.1:8080
+#   Probe Kafka: curl -XPOST http://127.0.0.1:8080/api/integrations/kafka/probe
+#   The OpenShell policy in openshell/austin-floodops.yaml is not enforced inside compose - it's enforced when launched via NemoClaw/OpenShell sandbox.
+
+services:
+  redpanda:
+    image: redpandadata/redpanda:v23.3.6
+    container_name: floodops-redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 1G
+      - --overprovisioned
+      - --node-id 0
+      - --check=false
+      - --kafka-addr internal://0.0.0.0:29092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:29092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:28082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:28082,external://localhost:18082
+    ports:
+      - "19092:19092"
+      - "18082:18082"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.true' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: floodops-app
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Override for local compose to use redpanda broker
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:29092
+      - KAFKA_TOPIC=floodops.events
+      - KAFKA_SECURITY_PROTOCOL=PLAINTEXT
+      - KAFKA_SASL_MECHANISM=PLAIN
+      - HOST=0.0.0.0
+      - PORT=8080
+      - NWS_USER_AGENT=AustinFloodOps/0.1 docker-compose
+      - POLL_SECONDS=30
+      - HEARTBEAT_ENABLED=true
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist sqlite ledger locally (authoritative if Supabase down)
+      - floodops-data:/app/data
+      # Mount replay fixtures read-only
+      - ./data/replay:/app/data/replay:ro
+    restart: unless-stopped
+
+volumes:
+  floodops-data:

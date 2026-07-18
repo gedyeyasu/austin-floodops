@@ -4,10 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Austin FloodOps · Operations Console</title>
+  <title>Austin FloodOps · Enterprise Ops Console v0.3.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <style>
     :root {
       --bg: #070b0a;
@@ -35,7 +37,7 @@
     button, select, input { font: inherit; }
     button { min-height: 38px; border: 1px solid var(--line-strong); border-radius: 3px; padding: 8px 13px; background: var(--surface-hot); color: var(--text); font-weight: 600; cursor: pointer; }
     button:hover { border-color: var(--green); color: var(--green); }
-    button:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
     button.primary { border-color: var(--green); background: var(--green); color: #04130a; }
     button.danger { border-color: #7b362b; color: var(--red); }
     button:disabled { opacity: .45; cursor: wait; }
@@ -44,6 +46,7 @@
     h2 { margin-bottom: 14px; font-size: .78rem; text-transform: uppercase; letter-spacing: .13em; color: var(--muted); }
     h3 { margin-bottom: 8px; font-size: 1rem; }
     p { color: var(--muted); line-height: 1.45; }
+    input, select { background: var(--surface); border: 1px solid var(--line); color: var(--text); padding: 6px 8px; border-radius: 3px; width: 100%; }
     .mono { font-family: var(--mono); }
     .topbar { height: 72px; border-bottom: 1px solid var(--line-strong); display: flex; align-items: center; justify-content: space-between; padding: 0 22px; background: #090e0c; }
     .brand { display: flex; align-items: center; gap: 13px; }
@@ -59,9 +62,9 @@
     .state-chip.active { color: var(--amber); border-color: #725c2b; background: var(--amber-dark); }
     .state-chip.success { color: var(--green); border-color: #286f45; background: var(--green-dark); }
     .state-chip.danger { color: var(--red); border-color: #773529; background: var(--red-dark); }
-    .workspace { display: grid; grid-template-columns: 292px minmax(520px, 1fr) 352px; min-height: calc(100vh - 119px); }
+    .workspace { display: grid; grid-template-columns: 292px minmax(520px, 1fr) 380px; min-height: calc(100vh - 119px); }
     .rail { border-right: 1px solid var(--line-strong); background: #090e0c; }
-    .right-rail { border-left: 1px solid var(--line-strong); background: #090e0c; }
+    .right-rail { border-left: 1px solid var(--line-strong); background: #090e0c; overflow-y: auto; max-height: calc(100vh - 119px); }
     .section { padding: 18px; border-bottom: 1px solid var(--line); }
     .rail-head { display: flex; align-items: center; justify-content: space-between; }
     .count { font: 500 .68rem var(--mono); color: var(--green); }
@@ -79,7 +82,7 @@
     .event strong { display: block; font-size: .78rem; line-height: 1.3; }
     .event small { color: var(--muted); font-size: .67rem; }
     .mode-label { margin-left: 5px; color: var(--amber); }
-    .center { min-width: 0; background: linear-gradient(180deg, #0a100d 0, var(--bg) 55%); }
+    .center { min-width: 0; background: linear-gradient(180deg, #0a100d 0, var(--bg) 55%); overflow-y: auto; max-height: calc(100vh - 119px); }
     .command { padding: 20px 22px; border-bottom: 1px solid var(--line-strong); }
     .command-grid { display: grid; grid-template-columns: 1fr 210px; gap: 18px; }
     .kicker { color: var(--green); font: 600 .67rem var(--mono); letter-spacing: .12em; text-transform: uppercase; }
@@ -93,6 +96,7 @@
     .grid { display: grid; grid-template-columns: 1fr 1fr; }
     .panel { min-width: 0; padding: 20px 22px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
     .panel:nth-child(even) { border-right: 0; }
+    .panel.full { grid-column: 1 / -1; }
     .metrics { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); }
     .metric { min-height: 84px; padding: 13px; border-right: 1px solid var(--line); }
     .metric:last-child { border-right: 0; }
@@ -103,12 +107,12 @@
     .chart .run1 { fill: #46564f; }
     .chart .run2 { fill: var(--green); }
     .chart .axis { stroke: var(--line-strong); stroke-width: 1; }
-    .empty { min-height: 100px; display: grid; place-items: center; border: 1px dashed var(--line); color: var(--faint); font: .7rem var(--mono); text-align: center; padding: 18px; }
+    .empty { min-height: 80px; display: grid; place-items: center; border: 1px dashed var(--line); color: var(--faint); font: .7rem var(--mono); text-align: center; padding: 18px; }
     .action-box { border: 1px solid var(--line); padding: 14px; background: var(--surface); }
     .action-box p:last-child { margin-bottom: 0; }
     .label { color: var(--faint); font: 600 .64rem var(--mono); text-transform: uppercase; letter-spacing: .08em; }
-    .security-list, .memory-list, .integration-list, .feedback-list { display: grid; gap: 7px; }
-    .security-item, .integration-item { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+    .security-list, .memory-list, .integration-list, .feedback-list, .audit-list { display: grid; gap: 7px; }
+    .security-item, .integration-item, .audit-item { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
     .security-item:last-child, .integration-item:last-child { border-bottom: 0; }
     .security-item span:first-child, .integration-item span:first-child { font-size: .75rem; }
     .verdict { font: 600 .62rem var(--mono); text-transform: uppercase; color: var(--amber); }
@@ -131,14 +135,16 @@
     details { margin-top: 12px; color: var(--muted); }
     summary { cursor: pointer; color: var(--text); font-size: .72rem; }
     pre { max-height: 160px; overflow: auto; white-space: pre-wrap; color: var(--muted); background: #070b09; border: 1px solid var(--line); padding: 10px; font: .65rem/1.45 var(--mono); }
+    #map { width: 100%; height: 340px; border: 1px solid var(--line); background: #080d0b; }
+    .prediction-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    .prediction-point { border: 1px solid var(--line); padding: 8px; background: var(--surface); }
+    .prediction-point strong { font: 600 .85rem var(--mono); }
+    .prediction-point span { font: .65rem var(--mono); color: var(--muted); display: block; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     @media (max-width: 1260px) {
       body { min-width: 1024px; }
-      .workspace { grid-template-columns: 260px minmax(470px, 1fr) 306px; }
+      .workspace { grid-template-columns: 260px minmax(470px, 1fr) 340px; }
       .top-actions button { padding-inline: 9px; }
-    }
-    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; } }
-    @media (prefers-color-scheme: light) {
-      :root { color-scheme: dark; }
     }
   </style>
 </head>
@@ -146,7 +152,7 @@
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark" aria-hidden="true">AF</div>
-      <div><h1>Austin FloodOps</h1><p>DECISION SUPPORT · HUMAN AUTHORITY</p></div>
+      <div><h1>Austin FloodOps v0.3.0 Enterprise</h1><p>DECISION SUPPORT · HUMAN AUTHORITY · GOV-GRADE</p></div>
     </div>
     <nav class="top-actions" aria-label="Primary demo controls">
       <div class="heartbeat"><span id="pulse" class="pulse"></span><span id="heartbeat-label">HEARTBEAT CHECKING</span></div>
@@ -167,6 +173,9 @@
     <span class="state-chip" data-state="rejected">Rejected</span>
     <span class="state-chip" data-state="quarantined-payload">Quarantined</span>
     <span class="state-chip" data-state="retired-memory">Retired memory</span>
+    <span class="state-chip" data-state="prediction-active">Prediction</span>
+    <span class="state-chip" data-state="routing-active">Routing</span>
+    <span class="state-chip" data-state="audit-verified">Audit verified</span>
   </div>
 
   <main class="workspace">
@@ -174,6 +183,30 @@
       <section class="section">
         <div class="rail-head"><h2 id="timeline-title">Event timeline</h2><span id="event-count" class="count">0 EVENTS</span></div>
         <div id="timeline" class="timeline"><div class="empty">No evidence received.<br>Heartbeat remains fail-closed.</div></div>
+      </section>
+      <section class="section">
+        <h2>Enterprise controls</h2>
+        <div class="control-stack">
+          <button data-scenario="flash-flood-warning-only">Inject · warning-only</button>
+          <button data-scenario="gage-rise-with-warning">Inject · gage rise + warning</button>
+          <button data-scenario="all-clear-scenario">Inject · all clear</button>
+          <button id="adversarial-button" class="danger">Run adversarial payload</button>
+          <button id="reset-button">Reset view to run 1</button>
+        </div>
+        <div id="operator-status" class="status-line" role="status">No action taken.</div>
+      </section>
+      <section class="section">
+        <h2>RBAC quick switch (demo)</h2>
+        <div class="control-stack" style="gap:6px">
+          <input id="token-sub" placeholder="sub e.g. operator" value="demo-operator"/>
+          <select id="token-role"><option>viewer</option><option selected>operator</option><option>supervisor</option><option>admin</option><option>auditor</option><option>system</option></select>
+          <div class="row">
+            <button onclick="getTokenAs()">Get token as role</button>
+            <button onclick="setAuthToken(prompt('Paste JWT'))">Set token</button>
+          </div>
+          <button onclick="localStorage.removeItem('af-jwt'); updateAuthPanel();">Clear token (demo mode)</button>
+          <div id="auth-status" class="status-line mono">No token set, RBAC disabled = system role</div>
+        </div>
       </section>
     </aside>
 
@@ -193,6 +226,9 @@
           <button id="approve-button" disabled>Approve reversible action</button>
           <button id="reject-button" class="danger" disabled>Reject action</button>
           <button id="feedback-button" disabled>Record correction</button>
+          <button id="predict-button">Run prediction (15-180m)</button>
+          <button id="routing-button">Compute detour</button>
+          <button id="after-action-button">After-action report</button>
         </div>
       </section>
 
@@ -205,33 +241,59 @@
           <h2 id="impact-title">Scenario impact</h2>
           <div id="impact" class="empty">Inject a replay scenario to calculate impact.</div>
         </section>
-        <section class="panel" aria-labelledby="chart-title">
+
+        <section class="panel" aria-labelledby="map-title">
+          <h2 id="map-title">Ops map · Leaflet + floodplain</h2>
+          <div id="map"></div>
+          <div class="control-stack" style="margin-top:8px; grid-template-columns: 1fr 1fr; display:grid; gap:6px">
+            <button onclick="loadFloodplain()">Load floodplain GeoJSON</button>
+            <button onclick="renderMap()">Refresh map from events</button>
+          </div>
+          <div id="map-status" class="status-line">Map not initialized.</div>
+        </section>
+
+        <section class="panel" aria-labelledby="prediction-title">
+          <h2 id="prediction-title">Prediction panel · gage + risk trajectory</h2>
+          <div id="prediction-box" class="empty">Run prediction to see forecast + risk + impact per horizon.</div>
+        </section>
+
+        <section class="panel" aria-labelledby="routing-title">
+          <h2 id="routing-title">Routing · OSRM detour</h2>
+          <div id="routing-box" class="empty">Compute detour for blocked crossings. Uses OSRM or haversine fallback.</div>
+        </section>
+
+        <section class="panel" aria-labelledby="audit-title">
+          <h2 id="audit-title">Audit chain · tamper-evident</h2>
+          <div id="audit-box" class="audit-list"><div class="empty">Audit disabled or no entries.</div></div>
+          <div class="control-stack" style="margin-top:8px; grid-template-columns: 1fr 1fr; display:grid">
+            <button onclick="refreshAudit()">Refresh recent audit</button>
+            <button onclick="verifyCurrentAudit()">Verify chain</button>
+          </div>
+          <div id="audit-status" class="status-line">Audit not loaded.</div>
+        </section>
+
+        <section class="panel full" aria-labelledby="chart-title">
           <h2 id="chart-title">Recursive improvement</h2>
           <svg id="improvement-chart" class="chart" role="img" aria-label="Run one and run two evaluation comparison" viewBox="0 0 460 178">
             <text x="230" y="88" text-anchor="middle">Run evaluation to compare learning metrics</text>
           </svg>
           <div id="chart-summary" class="status-line">Run 1 excludes memory. Run 2 includes one operator correction per scenario.</div>
         </section>
+
         <section class="panel" aria-labelledby="evaluation-title">
           <h2 id="evaluation-title">Evaluation trace</h2>
           <div id="evaluation-trace" class="empty">Three replay scenarios are ready.</div>
+        </section>
+
+        <section class="panel" aria-labelledby="after-action-panel-title">
+          <h2 id="after-action-panel-title">After-action · FOIA & compliance</h2>
+          <div id="after-action-box" class="empty">Generate after-action for current incident to get FOIA package, timeline, metrics, audit verification, positive narrative.</div>
+          <pre id="after-action-pre" style="max-height:300px"></pre>
         </section>
       </div>
     </div>
 
     <aside class="right-rail">
-      <section class="section" aria-labelledby="demo-title">
-        <h2 id="demo-title">Demo controls</h2>
-        <div class="control-stack">
-          <button data-scenario="flash-flood-warning-only">Inject · warning-only</button>
-          <button data-scenario="gage-rise-with-warning">Inject · gage rise + warning</button>
-          <button data-scenario="all-clear-scenario">Inject · all clear</button>
-          <button id="adversarial-button" class="danger">Run adversarial payload</button>
-          <button id="reset-button">Reset view to run 1</button>
-        </div>
-        <div id="operator-status" class="status-line" role="status">No action taken.</div>
-      </section>
-
       <section class="section" aria-labelledby="security-title">
         <h2 id="security-title">Security console</h2>
         <div id="security" class="security-list">
@@ -249,8 +311,19 @@
       </section>
 
       <section class="section" aria-labelledby="integration-title">
-        <h2 id="integration-title">Integration gate</h2>
+        <h2 id="integration-title">Integration gate (16)</h2>
         <div id="integrations" class="integration-list"></div>
+        <div class="control-stack" style="margin-top:10px">
+          <button onclick="probeVLLM()">Probe vLLM /v1/models + chat</button>
+          <button onclick="probeOSRM()">Probe OSRM routing</button>
+        </div>
+        <div id="probe-status" class="status-line">Probes not run.</div>
+      </section>
+
+      <section class="section" aria-labelledby="auth-panel-title">
+        <h2 id="auth-panel-title">RBAC / Auth</h2>
+        <div id="auth-panel" class="security-list"><div class="empty">Loading auth/me…</div></div>
+        <div class="status-line mono" id="auth-me-status"></div>
       </section>
     </aside>
   </main>
@@ -260,6 +333,11 @@
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     let currentDecision = null;
     let lastEvaluation = null;
+    let currentEvents = [];
+    let mapObj = null;
+    let mapLayers = [];
+    let floodplainLayer = null;
+    let authToken = localStorage.getItem('af-jwt') || '';
 
     function state(name, kind = 'active') {
       const chip = document.querySelector(`[data-state="${name}"]`);
@@ -273,10 +351,20 @@
       document.querySelectorAll('button').forEach(button => button.disabled = active || (['approve-button','reject-button','feedback-button'].includes(button.id) && !currentDecision));
     }
 
+    function authHeaders(extra={}) {
+      const h = {...extra};
+      if (authToken) h['Authorization'] = `Bearer ${authToken}`;
+      return h;
+    }
+
     async function request(path, options = {}) {
+      options.headers = {...authHeaders(options.headers||{}), ...(options.headers||{})};
+      // ensure content-type for json
       const response = await fetch(path, options);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || `Request failed: ${response.status}`);
+      const text = await response.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = {detail: text}; }
+      if (!response.ok) throw new Error(data.detail || data.message || `Request failed: ${response.status}`);
       return data;
     }
 
@@ -286,10 +374,12 @@
     }
 
     function renderEvents(events) {
+      currentEvents = events || [];
       $('event-count').textContent = `${events.length} EVENT${events.length === 1 ? '' : 'S'}`;
       if (!events.length) {
         $('timeline').innerHTML = '<div class="empty">No evidence received.<br>Heartbeat remains fail-closed.</div>';
         state('no-incidents', 'active');
+        renderMap();
         return;
       }
       state('no-incidents', '');
@@ -300,6 +390,7 @@
           <strong>${escapeHtml(event.title)}</strong>
           <small>${escapeHtml(event.location || 'Location pending')}<span class="mode-label">${escapeHtml(event.mode.toUpperCase())}</span></small>
         </article>`).join('');
+      renderMap();
     }
 
     function renderImpact(estimate) {
@@ -320,7 +411,8 @@
         ['HiddenLayer interaction scan', hidden.status, hidden.detail || 'Model input/output boundary'],
         ['OpenShell action boundary', shell.status, shell.decision],
         ['Approval policy', policy.status, policy.reason],
-        ['Kafka evidence publish', kafka.status, `${kafka.published || 0} new event(s)`]
+        ['Kafka evidence publish', kafka.status, `${kafka.published || 0} new event(s)`],
+        ['vLLM fallback', (security.vllm||{}).status || 'not_used', 'Open-weight fallback probe'],
       ].map(([name, verdict, detail]) => `<div class="security-item"><span>${escapeHtml(name)}<br><small>${escapeHtml(detail || '')}</small></span><span class="verdict ${escapeHtml(verdict)}">${escapeHtml(verdict)}</span></div>`).join('');
       if (['blocked','quarantined'].includes(policy.status) || hidden.status === 'blocked') state('blocked-action', 'danger');
     }
@@ -422,7 +514,7 @@
       state('replay-mode', 'active');
       $('operator-status').textContent = `Injecting ${scenario} replay evidence…`;
       try {
-        const simulation = await request('/api/simulate', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({mode:'replay', scenario_id:scenario, horizon_minutes:60})});
+        const simulation = await request('/api/simulate', {method:'POST', headers:{'content-type':'application/json','Authorization': authToken?`Bearer ${authToken}`:''}, body:JSON.stringify({mode:'replay', scenario_id:scenario, horizon_minutes:60})});
         renderEvents(simulation.events || []);
         renderImpact(simulation.estimate);
         const assessment = await request('/api/assess', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({mode:'replay', scenario_id:scenario})});
@@ -434,7 +526,7 @@
 
     async function runLive() {
       loading(true);
-      $('operator-status').textContent = 'Gathering NWS and USGS evidence…';
+      $('operator-status').textContent = 'Gathering NWS and USGS and Austin evidence…';
       try { renderDecision(await request('/api/assess', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({mode:'live', scenario_id:'austin-live-operator-scan'})})); }
       catch (error) { renderDecision({events:[], decision:null, error:error.message, live:true}); }
       finally { loading(false); }
@@ -456,6 +548,7 @@
       state('successful-approval', result.status === 'allowed' ? 'success' : 'danger');
       $('operator-status').textContent = `${result.status.toUpperCase()}: ${result.reason} No responder message sent.`;
       renderSecurity({...(currentDecision.raw_model_response.security || {}), policy:result});
+      refreshAudit();
     }
 
     async function rejectCurrent() {
@@ -465,6 +558,7 @@
       state('pending-approval', ''); state('rejected', 'danger'); state('blocked-action', 'danger');
       $('operator-status').textContent = result.reason;
       renderSecurity({...(currentDecision.raw_model_response.security || {}), policy:result});
+      refreshAudit();
     }
 
     async function recordFeedback() {
@@ -476,6 +570,7 @@
         const result = await request(`/api/decisions/${currentDecision.incident_id}/feedback`, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({correction, outcome:'helpful'})});
         $('operator-status').textContent = result.reflection_status === 'created' ? `Rule ${result.memory.id} created from operator feedback.` : `Correction saved; reflection degraded: ${result.detail}`;
         await refreshLearning();
+        refreshAudit();
       } finally { loading(false); }
     }
 
@@ -522,11 +617,263 @@
         if (heartbeat.consecutive_failures > 0) state('stale-source', 'danger');
         renderEvents(events);
         await refreshLearning();
+        await updateAuthPanel();
       } catch (error) {
         state('stale-source', 'danger');
         $('heartbeat-label').textContent = 'SOURCE STATUS UNAVAILABLE';
       }
     }
+
+    // === Enterprise Maps ===
+    function ensureMap() {
+      if (mapObj) return mapObj;
+      try {
+        mapObj = L.map('map').setView([30.2672, -97.7431], 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: '&copy; OpenStreetMap'}).addTo(mapObj);
+        $('map-status').textContent = 'Map initialized - Leaflet + OSM.';
+        return mapObj;
+      } catch (e) {
+        $('map-status').textContent = 'Map init failed: '+e.message;
+        return null;
+      }
+    }
+
+    function renderMap() {
+      const map = ensureMap();
+      if (!map) return;
+      // clear layers
+      mapLayers.forEach(l => { try { map.removeLayer(l); } catch {} });
+      mapLayers = [];
+      if (!currentEvents || !currentEvents.length) {
+        $('map-status').textContent = 'No events to render.';
+        return;
+      }
+      let bounds = [];
+      currentEvents.forEach(ev => {
+        if (ev.latitude && ev.longitude) {
+          const color = ev.severity === 'severe' || ev.severity === 'extreme' ? '#ff806b' : ev.severity==='moderate' ? '#f2c15b' : '#7cf7ad';
+          const marker = L.circleMarker([ev.latitude, ev.longitude], {radius: 6, color, fillColor: color, fillOpacity: 0.8}).addTo(map);
+          marker.bindPopup(`<b>${escapeHtml(ev.title)}</b><br>${escapeHtml(ev.source)} ${escapeHtml(ev.severity)}<br>${escapeHtml(ev.location||'')}`);
+          mapLayers.push(marker);
+          bounds.push([ev.latitude, ev.longitude]);
+        }
+      });
+      if (bounds.length) {
+        try { map.fitBounds(bounds, {padding: [20,20], maxZoom: 13}); } catch {}
+        $('map-status').textContent = `Rendered ${bounds.length} geo events. ${floodplainLayer?'Floodplain loaded':''}`;
+      } else {
+        $('map-status').textContent = 'Events have no lat/long. Load floodplain polygons.';
+      }
+    }
+
+    async function loadFloodplain() {
+      const map = ensureMap();
+      if (!map) return;
+      $('map-status').textContent = 'Loading floodplain GeoJSON from /api/floodplain…';
+      try {
+        const fc = await request('/api/floodplain?limit=100');
+        if (floodplainLayer) { try { map.removeLayer(floodplainLayer); } catch {} }
+        floodplainLayer = L.geoJSON(fc, {
+          style: feature => ({color: '#82c8ff', weight: 1, fillColor: '#123522', fillOpacity: 0.2}),
+          onEachFeature: (f, layer) => { layer.bindPopup(`<b>${escapeHtml(f.properties?.name || 'Floodplain')}</b><br>${escapeHtml(JSON.stringify(f.properties||{}).slice(0,200))}`); }
+        }).addTo(map);
+        mapLayers.push(floodplainLayer);
+        $('map-status').textContent = `Floodplain loaded: ${fc.features?.length||0} features. Fallback=${!!fc.fallback}`;
+      } catch (e) {
+        $('map-status').textContent = 'Floodplain load failed: '+e.message;
+      }
+    }
+
+    // === Prediction ===
+    async function runPrediction() {
+      if (!currentEvents.length && !currentDecision) {
+        $('prediction-box').innerHTML = '<div class="empty">No evidence - run a scenario first.</div>';
+        return;
+      }
+      loading(true);
+      $('prediction-box').innerHTML = '<div class="empty">Running prediction: gage forecast OLS + risk trajectory + impact…</div>';
+      try {
+        const payload = {
+          mode: currentDecision ? currentDecision.mode : 'live',
+          scenario_id: currentDecision ? currentDecision.scenario_id : 'austin-live-predict',
+          incident_id: currentDecision ? currentDecision.incident_id : null,
+          horizons_minutes: [15,30,60,120,180],
+        };
+        const result = await request('/api/predict', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload)});
+        state('prediction-active', 'active');
+        const pts = result.points || [];
+        $('prediction-box').innerHTML = `<div class="prediction-grid">${pts.map(p=>`
+          <div class="prediction-point">
+            <strong>${p.horizon_minutes}m</strong>
+            <span>${escapeHtml(p.risk_level.toUpperCase())} ${Math.round(p.risk_score*100)}%</span>
+            <span>Gage ${p.gage_ft} ft @ ${Math.round(p.gage_confidence*100)}%</span>
+            <span>Depth ${p.impact?.estimated_depth_m}m | Exp ${p.impact?.exposed_people}</span>
+          </div>`).join('')}</div>
+          <details style="margin-top:8px"><summary>Forecast raw: slope ${result.forecast?.slope_ft_per_hour} ft/h, R2 ${result.forecast?.r_squared}, method ${escapeHtml(result.forecast?.method)}</summary><pre>${escapeHtml(JSON.stringify(result, null, 2).slice(0,3000))}</pre></details>`;
+        // add forecast markers to map
+        if (mapObj) {
+          pts.forEach(p=>{
+            if (p.impact?.blocked_crossings?.length) {
+              // no geo for blocked crossings, but add to status
+            }
+          });
+        }
+      } catch (e) {
+        $('prediction-box').innerHTML = `<div class="status-line error">Prediction failed: ${escapeHtml(e.message)}</div>`;
+      } finally { loading(false); }
+    }
+
+    // === Routing ===
+    async function runRouting() {
+      loading(true);
+      $('routing-box').innerHTML = '<div class="empty">Computing OSRM detour for blocked crossings…</div>';
+      try {
+        // Derive blocked crossings from current decision or events
+        let blocked = [];
+        if (currentEvents) {
+          blocked = currentEvents.filter(ev=>ev.kind==='road_closure' || ev.title.toLowerCase().includes('closure') || ev.title.toLowerCase().includes('crossing')).map(ev=>({location: ev.location, latitude: ev.latitude, longitude: ev.longitude, name: ev.location||ev.title}));
+          if (!blocked.length && currentDecision) {
+            blocked = [{location: currentDecision.proposed_action.target, name: currentDecision.proposed_action.target, latitude: 30.12, longitude: -97.8}];
+          }
+        }
+        if (!blocked.length) blocked = [{location: 'Onion Creek low-water', latitude: 30.12, longitude: -97.8}];
+        const result = await request('/api/routing/detour', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({blocked_crossings: blocked})});
+        state('routing-active', 'active');
+        $('routing-box').innerHTML = result.routes.map(r=>`
+          <div class="security-item"><span><b>${escapeHtml(r.route_id)}</b> ${escapeHtml(r.origin.name)} → ${escapeHtml(r.destination.name)}<br><small>${(r.distance_m/1000).toFixed(2)} km, ${Math.round(r.duration_s/60)} min via ${escapeHtml(r.method)} | avoids ${escapeHtml((r.blocked_avoided||[]).join(', '))}</small></span><span class="verdict ${r.method.includes('osrm')?'verified':'degraded'}">${escapeHtml(r.method.includes('osrm')?'OSRM':'fallback')}</span></div>
+        `).join('') + `<details><summary>GeoJSON geometries</summary><pre>${escapeHtml(JSON.stringify(result.routes.map(rr=>rr.geometry).slice(0,2), null, 2).slice(0,2000))}</pre></details>`;
+
+        // render route on map
+        const map = ensureMap();
+        if (map) {
+          result.routes.forEach(route=>{
+            if (route.geometry && route.geometry.coordinates) {
+              try {
+                const layer = L.geoJSON(route.geometry, {style:{color:'#7cf7ad', weight:3}}).addTo(map);
+                mapLayers.push(layer);
+              } catch {}
+            }
+          });
+        }
+      } catch (e) {
+        $('routing-box').innerHTML = `<div class="status-line error">Routing failed: ${escapeHtml(e.message)}</div>`;
+      } finally { loading(false); }
+    }
+
+    // === Audit ===
+    async function refreshAudit() {
+      try {
+        const data = await request('/api/audit/recent?limit=30');
+        if (!data.entries || !data.entries.length) {
+          $('audit-box').innerHTML = '<div class="empty">No audit entries.</div>';
+        } else {
+          $('audit-box').innerHTML = data.entries.map(en=>`
+            <div class="audit-item"><span><b>${escapeHtml(en.event_type)}</b> @ ${escapeHtml(en.created_at)}<br><small>incident ${escapeHtml(en.incident_id||'global')} actor ${escapeHtml(en.actor_id)}:${escapeHtml(en.actor_role)} hash ${escapeHtml(en.hash.slice(0,12))}… prev ${escapeHtml(en.prev_hash.slice(0,8))}…</small><br><small>${escapeHtml((en.payload||'').slice(0,150))}</small></span><span class="verdict">${escapeHtml(en.id)}</span></div>
+          `).join('');
+        }
+        $('audit-status').textContent = `Recent ${data.count} audit entries. Chain uses SHA256(prev+payload+timestamp).`;
+        if (data.status==='disabled') $('audit-status').textContent = 'Audit disabled.';
+      } catch (e) {
+        $('audit-box').innerHTML = `<div class="status-line error">Audit load failed: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    async function verifyCurrentAudit() {
+      const incidentId = currentDecision ? currentDecision.incident_id : (prompt('Incident ID to verify:')||'');
+      if (!incidentId) return;
+      try {
+        const data = await request(`/api/audit/verify/${incidentId}`);
+        $('audit-status').textContent = `Verification: global verified=${data.global_verification.verified} total=${data.global_verification.total_entries} incident verified sample errors=${data.incident_verification.errors?.length||0}`;
+        if (data.global_verification.verified) state('audit-verified','success');
+        else state('audit-verified','danger');
+        $('audit-box').innerHTML += `<pre>${escapeHtml(JSON.stringify(data, null, 2).slice(0,2000))}</pre>`;
+      } catch (e) {
+        $('audit-status').textContent = 'Verify failed: '+e.message;
+      }
+    }
+
+    async function generateAfterAction() {
+      if (!currentDecision) { $('after-action-box').innerHTML='<div class="status-line error">No current decision.</div>'; return; }
+      loading(true);
+      $('after-action-box').innerHTML = '<div class="empty">Generating after-action report with timeline, metrics, compliance, FOIA…</div>';
+      try {
+        const report = await request(`/api/after-action/${currentDecision.incident_id}`, {method:'POST'});
+        $('after-action-box').innerHTML = `<p><b>Metrics:</b> evidence ${report.metrics.evidence_count} sources ${escapeHtml(report.metrics.unique_sources.join(','))} feedback ${report.metrics.feedback_count} memories ${report.metrics.memory_count}</p>
+          <p><b>Compliance:</b> ${escapeHtml(JSON.stringify(report.compliance))}</p>
+          <p><b>Narrative:</b> ${escapeHtml(report.positive_change_narrative)}</p>
+          <details><summary>FOIA package</summary><pre>${escapeHtml(JSON.stringify(report.foia_package, null, 2))}</pre></details>`;
+        $('after-action-pre').textContent = JSON.stringify(report, null, 2).slice(0,8000);
+      } catch (e) {
+        $('after-action-box').innerHTML = `<div class="status-line error">After-action failed: ${escapeHtml(e.message)}</div>`;
+      } finally { loading(false); refreshAudit(); }
+    }
+
+    // === RBAC ===
+    function setAuthToken(token) {
+      if (!token) return;
+      authToken = token.trim();
+      localStorage.setItem('af-jwt', authToken);
+      updateAuthPanel();
+    }
+
+    async function getTokenAs() {
+      const sub = ($('token-sub')?.value || 'demo-operator').trim() || 'demo-operator';
+      const role = ($('token-role')?.value || 'operator').trim();
+      try {
+        const data = await request('/api/auth/token', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({sub, role, expires_minutes: 480})});
+        setAuthToken(data.access_token);
+        $('auth-status').textContent = `Token set for ${data.sub}:${data.role} (${data.token_type}) expires ${data.expires_minutes}m`;
+      } catch (e) {
+        $('auth-status').textContent = 'Token fetch failed: '+e.message;
+      }
+    }
+
+    async function updateAuthPanel() {
+      authToken = localStorage.getItem('af-jwt') || authToken;
+      $('auth-status').textContent = authToken ? `Token present: ${authToken.slice(0,20)}…` : 'No token set, RBAC disabled = system role';
+      try {
+        const me = await request('/api/auth/me');
+        $('auth-panel').innerHTML = `<div class="security-item"><span>${escapeHtml(me.sub)}<br><small>role ${escapeHtml(me.role)} is_system ${me.is_system} rbac_enabled ${me.rbac_enabled}</small></span><span class="verdict ${me.is_system?'verified':'allow'}">${escapeHtml(me.role)}</span></div>`;
+        $('auth-me-status').textContent = `Auth/me: sub=${me.sub} role=${me.role} rbac_enabled=${me.rbac_enabled}`;
+      } catch (e) {
+        $('auth-panel').innerHTML = `<div class="status-line error">Auth/me failed: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    async function probeVLLM() {
+      $('probe-status').textContent = 'Probing vLLM /v1/models + /v1/chat/completions…';
+      try {
+        const data = await request('/api/integrations/vllm/probe', {method:'POST'});
+        $('probe-status').textContent = `vLLM probe: status=${data.status} base=${data.base_url} models=${(data.models||[]).length} detail=${(data.detail||'').slice(0,200)}`;
+      } catch (e) {
+        $('probe-status').textContent = 'vLLM probe failed: '+e.message;
+      }
+    }
+
+    async function probeOSRM() {
+      $('probe-status').textContent = 'Probing OSRM routing…';
+      try {
+        const data = await request('/api/integrations/osrm/probe', {method:'POST'});
+        $('probe-status').textContent = `OSRM probe: status=${data.status} base=${data.base_url} distance=${data.distance_m||'n/a'} duration=${data.duration_s||'n/a'}`;
+      } catch (e) {
+        $('probe-status').textContent = 'OSRM probe failed: '+e.message;
+      }
+    }
+
+    // Global exports for onclick HTML
+    window.runPrediction = runPrediction;
+    window.runRouting = runRouting;
+    window.loadFloodplain = loadFloodplain;
+    window.refreshAudit = refreshAudit;
+    window.generateAfterAction = generateAfterAction;
+    window.setAuthToken = setAuthToken;
+    window.getTokenAs = getTokenAs;
+    window.ensureMap = ensureMap;
+    window.renderMap = renderMap;
+    window.verifyCurrentAudit = verifyCurrentAudit;
+    window.probeVLLM = probeVLLM;
+    window.probeOSRM = probeOSRM;
+    window.retireMemory = retireMemory;
 
     document.querySelectorAll('[data-scenario]').forEach(button => button.addEventListener('click', () => runScenario(button.dataset.scenario)));
     $('live-button').addEventListener('click', runLive);
@@ -536,8 +883,14 @@
     $('feedback-button').addEventListener('click', recordFeedback);
     $('adversarial-button').addEventListener('click', adversarial);
     $('reset-button').addEventListener('click', resetRun1);
+    $('predict-button').addEventListener('click', runPrediction);
+    $('routing-button').addEventListener('click', runRouting);
+    $('after-action-button').addEventListener('click', generateAfterAction);
+
     refreshSystem();
     window.setInterval(refreshSystem, 30000);
+    // Init map after load
+    setTimeout(()=>{ ensureMap(); }, 500);
   </script>
   <!-- FALLBACK: vendor/pretext.js missing, using CDN -->
   <script type="module">

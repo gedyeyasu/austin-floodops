@@ -51,6 +51,16 @@ class Settings:
     webeoc_input_view_name: str = os.getenv("WEBEOC_INPUT_VIEW_NAME", "")
     openshell_gateway: str = os.getenv("OPENSHELL_GATEWAY", "")
 
+    # --- Enterprise extensions (v0.3.0) ---
+    vllm_base_url: str = os.getenv("VLLM_BASE_URL", os.getenv("VLLM_URL", "")).rstrip("/")
+    vllm_model: str = os.getenv("VLLM_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct")
+    vllm_api_key: str = os.getenv("VLLM_API_KEY", "")
+    jwt_secret: str = os.getenv("JWT_SECRET", "dev-only-change-me-austin-floodops-jwt-secret")
+    enable_rbac: bool = os.getenv("ENABLE_RBAC", "false").lower() in {"1", "true", "yes", "on"}
+    osrm_base_url: str = os.getenv("OSRM_BASE_URL", "https://router.project-osrm.org").rstrip("/")
+    enable_prediction: bool = os.getenv("ENABLE_PREDICTION", "true").lower() in {"1", "true", "yes", "on"}
+    enable_audit_chain: bool = os.getenv("ENABLE_AUDIT_CHAIN", "true").lower() in {"1", "true", "yes", "on"}
+
     @property
     def has_nvidia_key(self) -> bool:
         return bool(self.nvidia_api_key or self.nvidia_inference_api_key)
@@ -92,6 +102,14 @@ class Settings:
     @property
     def has_openshell(self) -> bool:
         return bool(self.openshell_gateway)
+
+    @property
+    def has_vllm(self) -> bool:
+        return bool(self.vllm_base_url)
+
+    @property
+    def has_osrm(self) -> bool:
+        return bool(self.osrm_base_url)
 
 
 settings = Settings()
