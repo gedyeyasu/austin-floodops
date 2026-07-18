@@ -17,13 +17,7 @@ def _parse_datetime(value: str | None) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-async def fetch_nws_alerts(user_agent: str, limit: int = 20) -> list[FloodEvent]:
-    headers = {"User-Agent": user_agent, "Accept": "application/geo+json"}
-    async with httpx.AsyncClient(timeout=20, headers=headers, follow_redirects=True) as client:
-        response = await client.get(NWS_ALERTS_URL)
-        response.raise_for_status()
-        payload: dict[str, Any] = response.json()
-
+def parse_nws_alerts(payload: dict[str, Any], limit: int = 20, *, mode: str = "live") -> list[FloodEvent]:
     events: list[FloodEvent] = []
     for feature in payload.get("features", [])[:limit]:
         properties = feature.get("properties", {})
@@ -37,6 +31,7 @@ async def fetch_nws_alerts(user_agent: str, limit: int = 20) -> list[FloodEvent]
             longitude, latitude = coords[:2]
         events.append(
             FloodEvent(
+                event_id=str(properties.get("id") or feature.get("id") or f"nws-{properties.get('sent')}-{event_name}-{properties.get('areaDesc')}"),
                 source="nws",
                 observed_at=_parse_datetime(properties.get("sent") or properties.get("effective")),
                 kind="weather_alert",
@@ -47,7 +42,16 @@ async def fetch_nws_alerts(user_agent: str, limit: int = 20) -> list[FloodEvent]
                 longitude=longitude,
                 provenance_url=properties.get("id") or NWS_ALERTS_URL,
                 raw=feature,
-                mode="live",
+                mode=mode,
             )
         )
     return events
+
+
+async def fetch_nws_alerts(user_agent: str, limit: int = 20) -> list[FloodEvent]:
+    headers = {"User-Agent": user_agent, "Accept": "application/geo+json"}
+    async with httpx.AsyncClient(timeout=20, headers=headers, follow_redirects=True) as client:
+        response = await client.get(NWS_ALERTS_URL)
+        response.raise_for_status()
+        payload: dict[str, Any] = response.json()
+    return parse_nws_alerts(payload, limit)

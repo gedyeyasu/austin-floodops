@@ -37,7 +37,7 @@ def _extract_json(content: str) -> dict[str, Any]:
     return value
 
 
-def _prompt(events: list[FloodEvent], scenario_id: str) -> str:
+def _prompt(events: list[FloodEvent], scenario_id: str, memory_context: str = "") -> str:
     # Keep the decision context bounded. NWS can return a burst of overlapping
     # county alerts; the ledger still preserves every event, but the model gets
     # the newest evidence per source rather than an oversized prompt.
@@ -66,6 +66,9 @@ This is text-only emergency operations analysis. Do not generate images, image p
 Do not call tools or access URLs. Return exactly one JSON object.
 Use only the evidence fields shown below; never invent a tool result.
 
+Operator playbook context:
+{memory_context or "No relevant operator-validated playbook rules are available."}
+
 Evidence JSON:
 {json.dumps(evidence, indent=2)}
 
@@ -89,6 +92,7 @@ async def assess_incident(
     model: str,
     events: list[FloodEvent],
     scenario_id: str,
+    memory_context: str = "",
 ) -> IncidentDecision:
     if not api_key:
         raise IntegrationUnavailable("NVIDIA API key is not configured")
@@ -99,7 +103,7 @@ async def assess_incident(
         "model": model,
         "messages": [
             {"role": "system", "content": "You produce exactly one JSON incident decision for a safety-reviewed emergency-operations workflow. Never generate images or tool calls."},
-            {"role": "user", "content": _prompt(events, scenario_id)},
+            {"role": "user", "content": _prompt(events, scenario_id, memory_context)},
         ],
         "temperature": 0.1,
         "top_p": 0.7,

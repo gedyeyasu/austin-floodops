@@ -93,6 +93,14 @@ class OperatorFeedback(BaseModel):
     outcome: Literal["helpful", "not_helpful", "unknown"] = "unknown"
 
 
+class PlaybookRule(BaseModel):
+    trigger: str = Field(min_length=3, max_length=500)
+    action: str = Field(min_length=3, max_length=500)
+    rationale: str = Field(min_length=3, max_length=1000)
+    confidence: float = Field(ge=0, le=1)
+    context_tags: list[str] = Field(default_factory=list, max_length=20)
+
+
 class IntegrationStatus(BaseModel):
     name: str
     configured: bool

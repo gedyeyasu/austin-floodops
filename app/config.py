@@ -22,6 +22,7 @@ class Settings:
     usgs_site_id: str = os.getenv("USGS_SITE_ID", "08158000")
     usgs_parameter_codes: str = os.getenv("USGS_PARAMETER_CODES", "00060,00065")
     poll_seconds: int = int(os.getenv("POLL_SECONDS", "30"))
+    heartbeat_enabled: bool = os.getenv("HEARTBEAT_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
     # Accept the documented names plus the initial generic names in the
     # user-provided .env file. The values are never logged or sent to the UI.
     nvidia_api_key: str = os.getenv("NVIDIA_API_KEY", os.getenv("api_key", ""))

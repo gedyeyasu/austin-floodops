@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 
 from app.model.nemotron import IntegrationUnavailable, _extract_json
-from app.models import FloodEvent, IncidentDecision, ProposedAction
+from app.models import FloodEvent, IncidentDecision, PlaybookRule, ProposedAction
 from app.responders.cap import build_cap_alert
 from app.simulation.model import simulate_impact
 from app.safety.policy import evaluate
@@ -67,7 +67,12 @@ def test_store_is_idempotent_and_versions_feedback(tmp_path):
     assessed = decision()
     store.save_decision(assessed)
     store.add_feedback(assessed.incident_id, __import__("app.models", fromlist=["OperatorFeedback"]).OperatorFeedback(correction="Require a second gage before closure.", outcome="helpful"))
-    assert store.active_memories()[0]["rule"].startswith("Require a second")
+    first = store.add_memory(PlaybookRule(trigger="one gage rises", action="require a second gage before closure", rationale="avoid sensor anomalies", confidence=0.8, context_tags=["gage"]), assessed.incident_id)
+    second = store.add_memory(PlaybookRule(trigger="one gage rises rapidly", action="require confirmation", rationale="operator correction", confidence=0.9, context_tags=["gage"]), assessed.incident_id)
+    memories = store.active_memories()
+    assert first != second
+    assert memories[0]["version"] == 2
+    assert memories[1]["version"] == 1
 
 
 def test_replay_simulation_exposes_assumptions_and_high_risk():

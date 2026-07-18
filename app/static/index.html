@@ -1,66 +1,560 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Austin FloodOps</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Austin FloodOps · Operations Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { color-scheme: dark; --ink:#e8f0ec; --muted:#9db0a5; --bg:#08110e; --panel:#10201a; --line:#28503c; --accent:#59e39a; --warn:#ffc857; --danger:#ff8068; }
-    * { box-sizing:border-box; } body { margin:0; font-family:ui-sans-serif,system-ui,sans-serif; background:radial-gradient(circle at 80% 0,#183c2a 0,#08110e 42%); color:var(--ink); }
-    main { max-width:1240px; margin:auto; padding:32px 20px 60px; } header { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-bottom:24px; }
-    h1 { font-size:clamp(2rem,5vw,4.2rem); line-height:.95; margin:0; letter-spacing:-.06em; max-width:700px; } h2 { margin:0 0 14px; font-size:1.05rem; } h3 { margin:12px 0 6px; } p { color:var(--muted); line-height:1.5; }
-    .eyebrow { color:var(--accent); font-size:.76rem; font-weight:800; letter-spacing:.12em; } button { border:0; border-radius:999px; padding:11px 16px; background:var(--accent); color:#042015; font-weight:800; cursor:pointer; } button.secondary { background:#214235; color:var(--ink); } button:disabled { cursor:wait; opacity:.55; }
-    .actions { display:flex; gap:10px; flex-wrap:wrap; } .grid { display:grid; grid-template-columns:1.35fr .85fr; gap:16px; } .panel { background:rgba(16,32,26,.9); border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 15px 60px #0005; }
-    .wide { grid-column:1 / -1; } .status { display:flex; justify-content:space-between; gap:12px; border-bottom:1px solid var(--line); padding:9px 0; } .status:last-child { border-bottom:0; } .pill { border-radius:99px; padding:4px 9px; font-size:.74rem; background:#214235; white-space:nowrap; } .pill.warn { color:#211500; background:var(--warn); } .pill.danger { color:#2b0800; background:var(--danger); }
-    .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:16px; } .metric { padding:14px; border:1px solid var(--line); border-radius:12px; background:#0b1813; } .metric strong { display:block; font-size:1.45rem; margin-top:5px; } .metric small { color:var(--muted); }
-    pre { white-space:pre-wrap; font-size:.82rem; color:#c8ddd0; max-height:300px; overflow:auto; background:#09140f; border-radius:10px; padding:12px; } .empty { color:var(--muted); padding:14px 0; } .note { font-size:.82rem; color:var(--muted); }
-    @media (max-width:820px) { header,.grid { display:block; } header .actions { margin-top:18px; } .panel { margin-top:16px; } .metrics { grid-template-columns:repeat(2,1fr); } }
+    :root {
+      --bg: #070b0a;
+      --surface: #0c1210;
+      --surface-raised: #111a16;
+      --surface-hot: #17231d;
+      --line: #26342e;
+      --line-strong: #3a5046;
+      --text: #edf4f0;
+      --muted: #91a39a;
+      --faint: #607069;
+      --green: #7cf7ad;
+      --green-dark: #123522;
+      --amber: #f2c15b;
+      --amber-dark: #3b2d10;
+      --red: #ff806b;
+      --red-dark: #3e1712;
+      --blue: #82c8ff;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --sans: "IBM Plex Sans", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); }
+    body { margin: 0; min-width: 1120px; background: var(--bg); color: var(--text); font-family: var(--sans); }
+    button, select, input { font: inherit; }
+    button { min-height: 38px; border: 1px solid var(--line-strong); border-radius: 3px; padding: 8px 13px; background: var(--surface-hot); color: var(--text); font-weight: 600; cursor: pointer; }
+    button:hover { border-color: var(--green); color: var(--green); }
+    button:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    button.primary { border-color: var(--green); background: var(--green); color: #04130a; }
+    button.danger { border-color: #7b362b; color: var(--red); }
+    button:disabled { opacity: .45; cursor: wait; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 2px; font-size: 1.08rem; letter-spacing: .04em; }
+    h2 { margin-bottom: 14px; font-size: .78rem; text-transform: uppercase; letter-spacing: .13em; color: var(--muted); }
+    h3 { margin-bottom: 8px; font-size: 1rem; }
+    p { color: var(--muted); line-height: 1.45; }
+    .mono { font-family: var(--mono); }
+    .topbar { height: 72px; border-bottom: 1px solid var(--line-strong); display: flex; align-items: center; justify-content: space-between; padding: 0 22px; background: #090e0c; }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--green); color: var(--green); font-family: var(--mono); font-weight: 600; }
+    .brand p { margin: 0; font: 500 .68rem var(--mono); color: var(--faint); letter-spacing: .1em; }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .heartbeat { display: flex; align-items: center; gap: 8px; margin-right: 14px; font: 500 .7rem var(--mono); color: var(--muted); }
+    .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
+    .pulse.live { background: var(--green); box-shadow: 0 0 0 5px #7cf7ad18; animation: pulse 2s infinite; }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 8px #7cf7ad00; } }
+    .state-strip { height: 47px; display: flex; align-items: center; gap: 7px; padding: 0 22px; border-bottom: 1px solid var(--line); overflow: hidden; background: var(--surface); }
+    .state-chip { border: 1px solid var(--line); padding: 4px 7px; color: var(--faint); font: 500 .62rem var(--mono); text-transform: uppercase; white-space: nowrap; }
+    .state-chip.active { color: var(--amber); border-color: #725c2b; background: var(--amber-dark); }
+    .state-chip.success { color: var(--green); border-color: #286f45; background: var(--green-dark); }
+    .state-chip.danger { color: var(--red); border-color: #773529; background: var(--red-dark); }
+    .workspace { display: grid; grid-template-columns: 292px minmax(520px, 1fr) 352px; min-height: calc(100vh - 119px); }
+    .rail { border-right: 1px solid var(--line-strong); background: #090e0c; }
+    .right-rail { border-left: 1px solid var(--line-strong); background: #090e0c; }
+    .section { padding: 18px; border-bottom: 1px solid var(--line); }
+    .rail-head { display: flex; align-items: center; justify-content: space-between; }
+    .count { font: 500 .68rem var(--mono); color: var(--green); }
+    .timeline { position: relative; display: grid; gap: 3px; max-height: calc(100vh - 210px); overflow-y: auto; padding-right: 3px; }
+    .timeline::before { content: ""; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 1px; background: var(--line-strong); }
+    .event { position: relative; padding: 9px 8px 9px 25px; border: 1px solid transparent; }
+    .event:hover { background: var(--surface); border-color: var(--line); }
+    .event::before { content: ""; position: absolute; left: 4px; top: 14px; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); border: 2px solid #090e0c; }
+    .event.severe::before, .event.extreme::before { background: var(--red); }
+    .event.moderate::before { background: var(--amber); }
+    .event-top { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .source { padding: 2px 5px; border: 1px solid var(--line-strong); color: var(--blue); font: 600 .6rem var(--mono); }
+    .source.usgs { color: var(--green); }
+    .event time { color: var(--faint); font: .61rem var(--mono); }
+    .event strong { display: block; font-size: .78rem; line-height: 1.3; }
+    .event small { color: var(--muted); font-size: .67rem; }
+    .mode-label { margin-left: 5px; color: var(--amber); }
+    .center { min-width: 0; background: linear-gradient(180deg, #0a100d 0, var(--bg) 55%); }
+    .command { padding: 20px 22px; border-bottom: 1px solid var(--line-strong); }
+    .command-grid { display: grid; grid-template-columns: 1fr 210px; gap: 18px; }
+    .kicker { color: var(--green); font: 600 .67rem var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .incident-title { margin: 6px 0 9px; max-width: 780px; font-size: clamp(1.45rem, 2.4vw, 2.25rem); line-height: 1.05; letter-spacing: -.035em; }
+    .incident-summary { max-width: 760px; margin-bottom: 0; }
+    .risk-block { border-left: 3px solid var(--amber); padding: 7px 0 7px 16px; align-self: start; }
+    .risk-block.danger { border-color: var(--red); }
+    .risk-block strong { display: block; font: 600 2rem var(--mono); }
+    .risk-block span { color: var(--muted); font: .68rem var(--mono); text-transform: uppercase; }
+    .decision-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; }
+    .panel { min-width: 0; padding: 20px 22px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .panel:nth-child(even) { border-right: 0; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); }
+    .metric { min-height: 84px; padding: 13px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric small { color: var(--muted); font: .65rem var(--mono); text-transform: uppercase; }
+    .metric strong { display: block; margin-top: 9px; font: 600 1.35rem var(--mono); }
+    .chart { width: 100%; min-height: 178px; border: 1px solid var(--line); background: #080d0b; }
+    .chart text { fill: var(--muted); font: 10px var(--mono); }
+    .chart .run1 { fill: #46564f; }
+    .chart .run2 { fill: var(--green); }
+    .chart .axis { stroke: var(--line-strong); stroke-width: 1; }
+    .empty { min-height: 100px; display: grid; place-items: center; border: 1px dashed var(--line); color: var(--faint); font: .7rem var(--mono); text-align: center; padding: 18px; }
+    .action-box { border: 1px solid var(--line); padding: 14px; background: var(--surface); }
+    .action-box p:last-child { margin-bottom: 0; }
+    .label { color: var(--faint); font: 600 .64rem var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+    .security-list, .memory-list, .integration-list, .feedback-list { display: grid; gap: 7px; }
+    .security-item, .integration-item { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+    .security-item:last-child, .integration-item:last-child { border-bottom: 0; }
+    .security-item span:first-child, .integration-item span:first-child { font-size: .75rem; }
+    .verdict { font: 600 .62rem var(--mono); text-transform: uppercase; color: var(--amber); }
+    .verdict.allow, .verdict.verified, .verdict.allowed, .verdict.published { color: var(--green); }
+    .verdict.blocked, .verdict.quarantined, .verdict.degraded { color: var(--red); }
+    .memory { padding: 11px; border-left: 2px solid var(--green); background: var(--surface); }
+    .memory.retired { border-color: var(--faint); opacity: .58; }
+    .memory-head { display: flex; justify-content: space-between; gap: 10px; }
+    .memory strong { font-size: .76rem; }
+    .memory p { margin: 6px 0; font-size: .71rem; }
+    .memory button { min-height: 28px; padding: 3px 7px; font-size: .62rem; }
+    .tag { display: inline-block; margin: 2px 3px 0 0; padding: 2px 5px; border: 1px solid var(--line); color: var(--muted); font: .58rem var(--mono); }
+    .correction { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .72rem; color: var(--muted); }
+    .control-stack { display: grid; gap: 8px; }
+    .control-stack button { width: 100%; text-align: left; }
+    .control-stack .primary { text-align: center; }
+    .right-rail .section { padding: 16px; }
+    .status-line { margin-top: 10px; padding: 8px; border: 1px solid var(--line); color: var(--muted); font: .66rem var(--mono); }
+    .status-line.error { color: var(--red); border-color: #713126; }
+    details { margin-top: 12px; color: var(--muted); }
+    summary { cursor: pointer; color: var(--text); font-size: .72rem; }
+    pre { max-height: 160px; overflow: auto; white-space: pre-wrap; color: var(--muted); background: #070b09; border: 1px solid var(--line); padding: 10px; font: .65rem/1.45 var(--mono); }
+    @media (max-width: 1260px) {
+      body { min-width: 1024px; }
+      .workspace { grid-template-columns: 260px minmax(470px, 1fr) 306px; }
+      .top-actions button { padding-inline: 9px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; } }
+    @media (prefers-color-scheme: light) {
+      :root { color-scheme: dark; }
+    }
   </style>
 </head>
 <body>
-<main>
-  <header>
-    <div><p class="eyebrow">AUSTIN FLOODOPS / NEMOTRON DECISION SUPPORT</p><h1>Turn rising water into a safe next move.</h1><p>Official NWS + USGS evidence, a transparent impact model, one reversible action, and human approval.</p></div>
-    <div class="actions"><button id="simulate">Run replay simulation</button><button id="assess" class="secondary">Run live assessment</button></div>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">AF</div>
+      <div><h1>Austin FloodOps</h1><p>DECISION SUPPORT · HUMAN AUTHORITY</p></div>
+    </div>
+    <nav class="top-actions" aria-label="Primary demo controls">
+      <div class="heartbeat"><span id="pulse" class="pulse"></span><span id="heartbeat-label">HEARTBEAT CHECKING</span></div>
+      <button id="live-button">Run live scan</button>
+      <button id="evaluation-button" class="primary">Run learning evaluation</button>
+    </nav>
   </header>
-  <div class="grid">
-    <section class="panel"><h2>Incident brief</h2><div id="incident" class="empty">Run an assessment to correlate live evidence.</div><div id="decision-actions" class="actions"></div></section>
-    <aside class="panel"><h2>Integration gate</h2><div id="health"></div></aside>
-    <section class="panel"><h2>Scenario impact</h2><div id="impact" class="empty">Run replay simulation to see screening estimates.</div></section>
-    <section class="panel"><h2>Responder handoff</h2><p class="note">WebEOC is the primary Texas target. CAP is the portable fallback. Nothing is sent until an approved action is explicitly confirmed.</p><pre id="cap">No CAP payload generated.</pre><div id="handoff" class="actions"></div></section>
-    <section class="panel wide"><h2>Evidence ledger</h2><pre id="events">No evidence captured yet.</pre></section>
-  </div>
-</main>
-<script>
-const $ = (id) => document.getElementById(id);
-const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let currentIncident = null;
 
-async function refreshHealth(){
-  const r=await fetch('/health'); const h=await r.json();
-  $('health').innerHTML=h.integrations.map(i=>`<div class="status"><span>${escapeHtml(i.name)}</span><span class="pill ${i.verified?'':'warn'}">${i.verified?'verified':i.configured?'configured':'needs setup'}</span></div>`).join('');
-}
-function renderEvents(events){ $('events').textContent=JSON.stringify(events,null,2); }
-function renderImpact(estimate){
-  if(!estimate){ $('impact').textContent='No estimate returned.'; return; }
-  const level = estimate.risk_level.toUpperCase();
-  $('impact').innerHTML=`<div class="metrics"><div class="metric"><small>Risk</small><strong>${escapeHtml(level)}</strong></div><div class="metric"><small>Depth screen</small><strong>${estimate.estimated_depth_m.toFixed(2)} m</strong></div><div class="metric"><small>Exposure screen</small><strong>${estimate.exposed_people.toLocaleString()}</strong></div><div class="metric"><small>Route delay</small><strong>${estimate.route_delay_minutes} min</strong></div></div><p>Confidence ${(estimate.confidence*100).toFixed(0)}% · ${escapeHtml(estimate.model_version)} · ${estimate.horizon_minutes}-minute horizon</p><p><strong>Priority crossings:</strong> ${estimate.blocked_crossings.length ? estimate.blocked_crossings.map(escapeHtml).join(', ') : 'none at current threshold'}</p><details><summary>Model assumptions</summary><ul>${estimate.assumptions.map(a=>`<li>${escapeHtml(a)}</li>`).join('')}</ul></details>`;
-}
-function renderDecision(data){
-  renderEvents(data.events || []); currentIncident = data.decision;
-  if(!data.decision){ $('incident').innerHTML=`<p class="pill warn">ASSESSMENT BLOCKED</p><p>${escapeHtml(data.error||'No decision returned.')}</p>`; $('decision-actions').innerHTML=''; return; }
-  const d=data.decision; const riskClass=['high','catastrophic'].includes(d.risk_level)?'danger':'';
-  $('incident').innerHTML=`<p><span class="pill ${riskClass}">${escapeHtml(d.risk_level.toUpperCase())}</span> · confidence ${(d.confidence*100).toFixed(0)}%</p><h3>${escapeHtml(d.summary)}</h3><p>${escapeHtml(d.proposed_action.rationale)}</p><p><strong>Proposed:</strong> ${escapeHtml(d.proposed_action.action_type)} → ${escapeHtml(d.proposed_action.target)}</p>`;
-  $('decision-actions').innerHTML=`<button class="secondary" onclick="approve('${encodeURIComponent(d.incident_id)}')">Approve reversible action</button><button class="secondary" onclick="feedback('${encodeURIComponent(d.incident_id)}')">Add correction</button>`;
-}
-async function runSimulation(){ $('simulate').disabled=true; $('simulate').textContent='Modeling…'; try { const r=await fetch('/api/simulate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'replay',scenario_id:'east-austin-night-market',horizon_minutes:60})}); const data=await r.json(); renderEvents(data.events||[]); renderImpact(data.estimate); } finally { $('simulate').disabled=false; $('simulate').textContent='Run replay simulation'; } }
-async function runAssessment(){ $('assess').disabled=true; $('assess').textContent='Gathering…'; try { const r=await fetch('/api/assess',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'live',scenario_id:'east-austin-night-market'})}); renderDecision(await r.json()); } finally { $('assess').disabled=false; $('assess').textContent='Run live assessment'; } }
-async function approve(id){ const r=await fetch('/api/decisions/'+decodeURIComponent(id)+'/approve',{method:'POST'}); const data=await r.json(); alert(JSON.stringify(data)); if(data.status==='allowed') renderHandoff(decodeURIComponent(id)); }
-async function renderHandoff(id){ const r=await fetch('/api/decisions/'+id+'/cap'); if(!r.ok)return; $('cap').textContent=await r.text(); $('handoff').innerHTML=`<button class="secondary" onclick="sendWebEOC('${encodeURIComponent(id)}')">Send approved CAP to WebEOC</button><button class="secondary" onclick="sendWebhook('${encodeURIComponent(id)}')">Send CAP webhook fallback</button>`; }
-async function sendWebEOC(id){ const r=await fetch('/api/decisions/'+decodeURIComponent(id)+'/webeoc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({confirm:true})}); alert(JSON.stringify(await r.json())); refreshHealth(); }
-async function sendWebhook(id){ const r=await fetch('/api/decisions/'+decodeURIComponent(id)+'/first-responder',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({confirm:true})}); alert(JSON.stringify(await r.json())); refreshHealth(); }
-async function feedback(id){ const correction=prompt('What should the operator remember next time?'); if(!correction)return; await fetch('/api/decisions/'+decodeURIComponent(id)+'/feedback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({correction,outcome:'helpful'})}); alert('Versioned operator correction saved.'); }
-$('simulate').onclick=runSimulation; $('assess').onclick=runAssessment; refreshHealth();
-</script>
+  <div id="state-strip" class="state-strip" aria-label="Demonstration state coverage">
+    <span class="state-chip" data-state="loading">Loading</span>
+    <span class="state-chip active" data-state="no-incidents">No incidents</span>
+    <span class="state-chip" data-state="stale-source">Stale source</span>
+    <span class="state-chip" data-state="replay-mode">Replay mode</span>
+    <span class="state-chip" data-state="model-error">Model error</span>
+    <span class="state-chip" data-state="blocked-action">Blocked action</span>
+    <span class="state-chip" data-state="pending-approval">Pending approval</span>
+    <span class="state-chip" data-state="successful-approval">Approved</span>
+    <span class="state-chip" data-state="rejected">Rejected</span>
+    <span class="state-chip" data-state="quarantined-payload">Quarantined</span>
+    <span class="state-chip" data-state="retired-memory">Retired memory</span>
+  </div>
+
+  <main class="workspace">
+    <aside class="rail" aria-labelledby="timeline-title">
+      <section class="section">
+        <div class="rail-head"><h2 id="timeline-title">Event timeline</h2><span id="event-count" class="count">0 EVENTS</span></div>
+        <div id="timeline" class="timeline"><div class="empty">No evidence received.<br>Heartbeat remains fail-closed.</div></div>
+      </section>
+    </aside>
+
+    <div class="center">
+      <section class="command" aria-labelledby="incident-title">
+        <div class="command-grid">
+          <div>
+            <div id="mode-kicker" class="kicker">Awaiting official evidence</div>
+            <h2 id="incident-title" class="incident-title flow-text" data-pretext>No active incident decision</h2>
+            <p id="incident-summary" class="incident-summary flow-text" data-pretext>Run a replay scenario, start a live assessment, or let the heartbeat process a new official event. No action is dispatched automatically.</p>
+          </div>
+          <div id="risk-block" class="risk-block">
+            <span>Operational risk</span><strong id="risk-level">—</strong><span id="confidence">No model result</span>
+          </div>
+        </div>
+        <div id="decision-actions" class="decision-actions">
+          <button id="approve-button" disabled>Approve reversible action</button>
+          <button id="reject-button" class="danger" disabled>Reject action</button>
+          <button id="feedback-button" disabled>Record correction</button>
+        </div>
+      </section>
+
+      <div class="grid">
+        <section class="panel" aria-labelledby="action-title">
+          <h2 id="action-title">Proposed action</h2>
+          <div id="action-box" class="empty">No proposal. Approval gate is closed.</div>
+        </section>
+        <section class="panel" aria-labelledby="impact-title">
+          <h2 id="impact-title">Scenario impact</h2>
+          <div id="impact" class="empty">Inject a replay scenario to calculate impact.</div>
+        </section>
+        <section class="panel" aria-labelledby="chart-title">
+          <h2 id="chart-title">Recursive improvement</h2>
+          <svg id="improvement-chart" class="chart" role="img" aria-label="Run one and run two evaluation comparison" viewBox="0 0 460 178">
+            <text x="230" y="88" text-anchor="middle">Run evaluation to compare learning metrics</text>
+          </svg>
+          <div id="chart-summary" class="status-line">Run 1 excludes memory. Run 2 includes one operator correction per scenario.</div>
+        </section>
+        <section class="panel" aria-labelledby="evaluation-title">
+          <h2 id="evaluation-title">Evaluation trace</h2>
+          <div id="evaluation-trace" class="empty">Three replay scenarios are ready.</div>
+        </section>
+      </div>
+    </div>
+
+    <aside class="right-rail">
+      <section class="section" aria-labelledby="demo-title">
+        <h2 id="demo-title">Demo controls</h2>
+        <div class="control-stack">
+          <button data-scenario="flash-flood-warning-only">Inject · warning-only</button>
+          <button data-scenario="gage-rise-with-warning">Inject · gage rise + warning</button>
+          <button data-scenario="all-clear-scenario">Inject · all clear</button>
+          <button id="adversarial-button" class="danger">Run adversarial payload</button>
+          <button id="reset-button">Reset view to run 1</button>
+        </div>
+        <div id="operator-status" class="status-line" role="status">No action taken.</div>
+      </section>
+
+      <section class="section" aria-labelledby="security-title">
+        <h2 id="security-title">Security console</h2>
+        <div id="security" class="security-list">
+          <div class="security-item"><span>HiddenLayer interaction scan</span><span class="verdict">Awaiting</span></div>
+          <div class="security-item"><span>OpenShell action boundary</span><span class="verdict">Enforced</span></div>
+          <div class="security-item"><span>Approval policy</span><span class="verdict blocked">Closed</span></div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="learning-title">
+        <div class="rail-head"><h2 id="learning-title">Learning panel</h2><span id="memory-count" class="count">0 RULES</span></div>
+        <div id="memory-list" class="memory-list"><div class="empty">No operator-validated rules.</div></div>
+        <h3 class="label" style="margin-top:14px">Operator corrections</h3>
+        <div id="feedback-list" class="feedback-list"><div class="correction">No corrections recorded.</div></div>
+      </section>
+
+      <section class="section" aria-labelledby="integration-title">
+        <h2 id="integration-title">Integration gate</h2>
+        <div id="integrations" class="integration-list"></div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    let currentDecision = null;
+    let lastEvaluation = null;
+
+    function state(name, kind = 'active') {
+      const chip = document.querySelector(`[data-state="${name}"]`);
+      if (!chip) return;
+      chip.classList.remove('active', 'success', 'danger');
+      if (kind) chip.classList.add(kind);
+    }
+
+    function loading(active) {
+      state('loading', active ? 'active' : '');
+      document.querySelectorAll('button').forEach(button => button.disabled = active || (['approve-button','reject-button','feedback-button'].includes(button.id) && !currentDecision));
+    }
+
+    async function request(path, options = {}) {
+      const response = await fetch(path, options);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || `Request failed: ${response.status}`);
+      return data;
+    }
+
+    function formatTime(value) {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? 'unknown' : date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    }
+
+    function renderEvents(events) {
+      $('event-count').textContent = `${events.length} EVENT${events.length === 1 ? '' : 'S'}`;
+      if (!events.length) {
+        $('timeline').innerHTML = '<div class="empty">No evidence received.<br>Heartbeat remains fail-closed.</div>';
+        state('no-incidents', 'active');
+        return;
+      }
+      state('no-incidents', '');
+      if (events.some(event => event.mode === 'replay')) state('replay-mode', 'active');
+      $('timeline').innerHTML = events.slice().sort((a,b) => new Date(b.observed_at)-new Date(a.observed_at)).map(event => `
+        <article class="event ${escapeHtml(event.severity)}">
+          <div class="event-top"><span class="source ${escapeHtml(event.source)}">${escapeHtml(event.source.toUpperCase())}</span><time>${escapeHtml(formatTime(event.observed_at))}</time></div>
+          <strong>${escapeHtml(event.title)}</strong>
+          <small>${escapeHtml(event.location || 'Location pending')}<span class="mode-label">${escapeHtml(event.mode.toUpperCase())}</span></small>
+        </article>`).join('');
+    }
+
+    function renderImpact(estimate) {
+      if (!estimate) return;
+      $('impact').innerHTML = `<div class="metrics">
+        <div class="metric"><small>Depth</small><strong>${Number(estimate.estimated_depth_m).toFixed(2)}m</strong></div>
+        <div class="metric"><small>Exposure</small><strong>${Number(estimate.exposed_people).toLocaleString()}</strong></div>
+        <div class="metric"><small>Delay</small><strong>${escapeHtml(estimate.route_delay_minutes)}m</strong></div>
+      </div><details><summary>Model assumptions and crossings</summary><p>${escapeHtml((estimate.blocked_crossings || []).join(', ') || 'No crossing threshold reached.')}</p><p>${(estimate.assumptions || []).map(escapeHtml).join(' · ')}</p></details>`;
+    }
+
+    function renderSecurity(security = {}) {
+      const hidden = security.hiddenlayer || {status:'not_configured'};
+      const shell = security.openshell || {status:'not_configured', decision:'approval_boundary_enforced'};
+      const policy = security.policy || {status:'closed', reason:'No active decision'};
+      const kafka = security.kafka || {status:'idle'};
+      $('security').innerHTML = [
+        ['HiddenLayer interaction scan', hidden.status, hidden.detail || 'Model input/output boundary'],
+        ['OpenShell action boundary', shell.status, shell.decision],
+        ['Approval policy', policy.status, policy.reason],
+        ['Kafka evidence publish', kafka.status, `${kafka.published || 0} new event(s)`]
+      ].map(([name, verdict, detail]) => `<div class="security-item"><span>${escapeHtml(name)}<br><small>${escapeHtml(detail || '')}</small></span><span class="verdict ${escapeHtml(verdict)}">${escapeHtml(verdict)}</span></div>`).join('');
+      if (['blocked','quarantined'].includes(policy.status) || hidden.status === 'blocked') state('blocked-action', 'danger');
+    }
+
+    function renderDecision(data) {
+      renderEvents(data.events || []);
+      currentDecision = data.decision || null;
+      if (!currentDecision) {
+        $('mode-kicker').textContent = data.live ? 'Live evidence · model unavailable' : 'Replay evidence · model unavailable';
+        $('incident-title').textContent = 'Assessment did not produce a decision';
+        $('incident-summary').textContent = data.error || 'No decision returned.';
+        $('risk-level').textContent = 'BLOCKED';
+        $('confidence').textContent = 'Approval disabled';
+        $('action-box').innerHTML = '<div class="empty">Fail-closed. No executable proposal.</div>';
+        $('risk-block').classList.add('danger');
+        state('model-error', 'danger');
+        state('blocked-action', 'danger');
+        $('operator-status').textContent = data.error || 'Assessment blocked.';
+        return;
+      }
+      const d = currentDecision;
+      const severe = ['high','catastrophic'].includes(d.risk_level);
+      $('mode-kicker').textContent = `${d.mode} assessment · ${d.model_name}`;
+      $('incident-title').textContent = d.summary;
+      $('incident-summary').textContent = `${d.evidence_event_ids.length} cited evidence items. Human approval remains required before any responder handoff.`;
+      $('risk-level').textContent = d.risk_level.toUpperCase();
+      $('confidence').textContent = `${Math.round(d.confidence * 100)}% confidence`;
+      $('risk-block').classList.toggle('danger', severe);
+      $('action-box').className = 'action-box';
+      $('action-box').innerHTML = `<span class="label">${escapeHtml(d.proposed_action.action_type)}</span><h3>${escapeHtml(d.proposed_action.target)}</h3><p>${escapeHtml(d.proposed_action.rationale)}</p><span class="verdict ${escapeHtml(d.policy_status)}">${escapeHtml(d.policy_status)}</span>`;
+      $('approve-button').disabled = false;
+      $('reject-button').disabled = false;
+      $('feedback-button').disabled = false;
+      if (d.policy_status === 'approval_required') state('pending-approval', 'active');
+      if (d.policy_status === 'blocked') state('blocked-action', 'danger');
+      renderSecurity(d.raw_model_response.security || {});
+      renderRetrieved(d.raw_model_response.learning || {});
+      $('operator-status').textContent = 'Decision ready for operator review. Nothing dispatched.';
+    }
+
+    function renderRetrieved(learning) {
+      const items = learning.retrieved_memories || [];
+      if (!items.length) return;
+      $('memory-list').innerHTML = items.map(memoryMarkup).join('');
+      $('memory-count').textContent = `${items.length} RETRIEVED`;
+    }
+
+    function memoryMarkup(memory) {
+      return `<article class="memory ${memory.active ? '' : 'retired'}">
+        <div class="memory-head"><strong>Rule ${escapeHtml(memory.id)} · v${escapeHtml(memory.version)}</strong><span class="verdict ${memory.active ? 'allow' : ''}">${memory.active ? 'active' : 'retired'}</span></div>
+        <p><b>IF</b> ${escapeHtml(memory.trigger || memory.rule)}<br><b>THEN</b> ${escapeHtml(memory.action || memory.rule)}</p>
+        <div>${(memory.context_tags || []).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</div>
+        ${memory.active ? `<button onclick="retireMemory(${Number(memory.id)})">Retire rule</button>` : ''}
+      </article>`;
+    }
+
+    async function refreshLearning() {
+      const [memories, feedback] = await Promise.all([request('/api/memories'), request('/api/feedback')]);
+      $('memory-count').textContent = `${memories.filter(item => item.active).length} ACTIVE`;
+      $('memory-list').innerHTML = memories.length ? memories.slice(0,6).map(memoryMarkup).join('') : '<div class="empty">No operator-validated rules.</div>';
+      $('feedback-list').innerHTML = feedback.length ? feedback.slice(0,5).map(item => `<div class="correction"><span class="verdict">${escapeHtml(item.outcome)}</span><br>${escapeHtml(item.correction)}</div>`).join('') : '<div class="correction">No corrections recorded.</div>';
+    }
+
+    function drawChart(comparison) {
+      const run1 = comparison.run_1;
+      const run2 = comparison.run_2;
+      const metrics = [
+        ['Accuracy', run1.accuracy_percent, run2.accuracy_percent, 100, '%'],
+        ['Latency', run1.latency_ms, run2.latency_ms, Math.max(run1.latency_ms, run2.latency_ms, 1), 'ms'],
+        ['Interventions', run1.interventions, run2.interventions, Math.max(run1.interventions, run2.interventions, 1), '']
+      ];
+      const groups = metrics.map((metric, index) => {
+        const x = 62 + index * 145;
+        const h1 = 100 * metric[1] / metric[3];
+        const h2 = 100 * metric[2] / metric[3];
+        return `<line class="axis" x1="${x-18}" y1="135" x2="${x+78}" y2="135"/>
+          <rect class="run1" x="${x}" y="${135-h1}" width="27" height="${h1}"/><rect class="run2" x="${x+34}" y="${135-h2}" width="27" height="${h2}"/>
+          <text x="${x+30}" y="153" text-anchor="middle">${metric[0]}</text>
+          <text x="${x+13}" y="${Math.max(12,128-h1)}" text-anchor="middle">${Math.round(metric[1])}${metric[4]}</text>
+          <text x="${x+47}" y="${Math.max(12,128-h2)}" text-anchor="middle">${Math.round(metric[2])}${metric[4]}</text>`;
+      }).join('');
+      $('improvement-chart').innerHTML = `${groups}<rect class="run1" x="12" y="163" width="10" height="10"/><text x="27" y="172">Run 1</text><rect class="run2" x="78" y="163" width="10" height="10"/><text x="93" y="172">Run 2 + memory</text>`;
+      $('chart-summary').textContent = `Accuracy ${run1.accuracy_percent}% → ${run2.accuracy_percent}% · Interventions ${run1.interventions} → ${run2.interventions} · Latency ${run1.latency_ms}ms → ${run2.latency_ms}ms`;
+    }
+
+    function renderEvaluation(result) {
+      lastEvaluation = result;
+      drawChart(result.comparison);
+      $('evaluation-trace').className = '';
+      $('evaluation-trace').innerHTML = result.scenarios.map(item => `<div class="security-item"><span>${escapeHtml(item.scenario_id)}<br><small>Expected ${escapeHtml(item.expected_risk)} · ${item.outcome_changed ? 'rule changed outcome' : 'outcome held'}</small></span><span class="verdict ${item.run_2.accurate ? 'allow' : 'blocked'}">${escapeHtml(item.run_1.risk_level)} → ${escapeHtml(item.run_2.risk_level)}</span></div>`).join('');
+      $('operator-status').textContent = `Evaluation complete: ${result.comparison.accuracy_delta >= 0 ? '+' : ''}${result.comparison.accuracy_delta}% accuracy, ${result.comparison.intervention_delta} interventions.`;
+      const evaluationMemories = result.scenarios.map(item => item.memory);
+      $('memory-list').innerHTML = evaluationMemories.map(memoryMarkup).join('');
+      $('memory-count').textContent = `${evaluationMemories.length} EVAL RULES`;
+    }
+
+    async function runScenario(scenario) {
+      loading(true);
+      state('replay-mode', 'active');
+      $('operator-status').textContent = `Injecting ${scenario} replay evidence…`;
+      try {
+        const simulation = await request('/api/simulate', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({mode:'replay', scenario_id:scenario, horizon_minutes:60})});
+        renderEvents(simulation.events || []);
+        renderImpact(simulation.estimate);
+        const assessment = await request('/api/assess', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({mode:'replay', scenario_id:scenario})});
+        renderDecision(assessment);
+      } catch (error) {
+        renderDecision({events:[], decision:null, error:error.message, live:false});
+      } finally { loading(false); }
+    }
+
+    async function runLive() {
+      loading(true);
+      $('operator-status').textContent = 'Gathering NWS and USGS evidence…';
+      try { renderDecision(await request('/api/assess', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({mode:'live', scenario_id:'austin-live-operator-scan'})})); }
+      catch (error) { renderDecision({events:[], decision:null, error:error.message, live:true}); }
+      finally { loading(false); }
+    }
+
+    async function runEvaluation() {
+      loading(true);
+      $('operator-status').textContent = 'Running three scenarios twice…';
+      try { renderEvaluation(await request('/api/evaluation/run', {method:'POST'})); }
+      catch (error) { state('model-error', 'danger'); $('operator-status').textContent = error.message; }
+      finally { loading(false); }
+    }
+
+    async function approveCurrent() {
+      if (!currentDecision) return;
+      const result = await request(`/api/decisions/${currentDecision.incident_id}/approve`, {method:'POST'});
+      currentDecision.policy_status = result.status;
+      state('pending-approval', '');
+      state('successful-approval', result.status === 'allowed' ? 'success' : 'danger');
+      $('operator-status').textContent = `${result.status.toUpperCase()}: ${result.reason} No responder message sent.`;
+      renderSecurity({...(currentDecision.raw_model_response.security || {}), policy:result});
+    }
+
+    async function rejectCurrent() {
+      if (!currentDecision) return;
+      const result = await request(`/api/decisions/${currentDecision.incident_id}/reject`, {method:'POST'});
+      currentDecision.policy_status = 'blocked';
+      state('pending-approval', ''); state('rejected', 'danger'); state('blocked-action', 'danger');
+      $('operator-status').textContent = result.reason;
+      renderSecurity({...(currentDecision.raw_model_response.security || {}), policy:result});
+    }
+
+    async function recordFeedback() {
+      if (!currentDecision) return;
+      const correction = window.prompt('What should the playbook learn from this assessment?');
+      if (!correction) return;
+      loading(true);
+      try {
+        const result = await request(`/api/decisions/${currentDecision.incident_id}/feedback`, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({correction, outcome:'helpful'})});
+        $('operator-status').textContent = result.reflection_status === 'created' ? `Rule ${result.memory.id} created from operator feedback.` : `Correction saved; reflection degraded: ${result.detail}`;
+        await refreshLearning();
+      } finally { loading(false); }
+    }
+
+    async function retireMemory(id) {
+      await request(`/api/memory/${id}/retire`, {method:'POST'});
+      state('retired-memory', 'active');
+      $('operator-status').textContent = `Memory ${id} retired. It will not be retrieved again.`;
+      await refreshLearning();
+    }
+
+    async function adversarial() {
+      loading(true);
+      try {
+        const result = await request('/api/security/adversarial-test', {method:'POST'});
+        state('quarantined-payload', 'danger'); state('blocked-action', 'danger');
+        $('operator-status').textContent = `${result.status.toUpperCase()}: ${result.detail || 'Unsafe payload blocked.'}`;
+        renderSecurity({hiddenlayer:result.hiddenlayer, openshell:{status:'enforced',decision:'deny exfiltration'}, policy:{status:result.policy,reason:'Adversarial test cannot reach an action channel'}, kafka:{status:'skipped'}});
+      } finally { loading(false); }
+    }
+
+    function resetRun1() {
+      currentDecision = null;
+      document.querySelectorAll('.state-chip').forEach(chip => chip.classList.remove('active','success','danger'));
+      state('no-incidents', 'active');
+      $('incident-title').textContent = 'Run 1 baseline restored';
+      $('incident-summary').textContent = 'Memory is excluded from the baseline. No persistent evidence or audit records were deleted.';
+      $('risk-level').textContent = '—'; $('confidence').textContent = 'No model result';
+      $('action-box').className = 'empty'; $('action-box').textContent = 'No proposal. Approval gate is closed.';
+      $('approve-button').disabled = true; $('reject-button').disabled = true; $('feedback-button').disabled = true;
+      if (lastEvaluation) {
+        drawChart({run_1:lastEvaluation.comparison.run_1, run_2:lastEvaluation.comparison.run_1});
+        $('chart-summary').textContent = 'Run 1 baseline shown. Memory comparison is hidden, not deleted.';
+      }
+      $('operator-status').textContent = 'View reset to run 1. Durable records remain available.';
+    }
+
+    async function refreshSystem() {
+      try {
+        const [health, heartbeat, events] = await Promise.all([request('/health'), request('/api/heartbeat'), request('/api/events')]);
+        $('integrations').innerHTML = health.integrations.map(item => `<div class="integration-item"><span>${escapeHtml(item.name)}<br><small>${escapeHtml(item.detail)}</small></span><span class="verdict ${item.verified ? 'verified' : item.configured ? '' : 'degraded'}">${item.verified ? 'verified' : item.configured ? 'configured' : 'omitted'}</span></div>`).join('');
+        const active = heartbeat.enabled && heartbeat.running;
+        $('pulse').classList.toggle('live', active);
+        $('heartbeat-label').textContent = active ? `HEARTBEAT ${heartbeat.interval_seconds}S · CYCLE ${heartbeat.cycles || 0}` : 'HEARTBEAT DEGRADED';
+        if (heartbeat.consecutive_failures > 0) state('stale-source', 'danger');
+        renderEvents(events);
+        await refreshLearning();
+      } catch (error) {
+        state('stale-source', 'danger');
+        $('heartbeat-label').textContent = 'SOURCE STATUS UNAVAILABLE';
+      }
+    }
+
+    document.querySelectorAll('[data-scenario]').forEach(button => button.addEventListener('click', () => runScenario(button.dataset.scenario)));
+    $('live-button').addEventListener('click', runLive);
+    $('evaluation-button').addEventListener('click', runEvaluation);
+    $('approve-button').addEventListener('click', approveCurrent);
+    $('reject-button').addEventListener('click', rejectCurrent);
+    $('feedback-button').addEventListener('click', recordFeedback);
+    $('adversarial-button').addEventListener('click', adversarial);
+    $('reset-button').addEventListener('click', resetRun1);
+    refreshSystem();
+    window.setInterval(refreshSystem, 30000);
+  </script>
+  <!-- FALLBACK: vendor/pretext.js missing, using CDN -->
+  <script type="module">
+    import { prepare, layout } from 'https://esm.sh/@chenglou/pretext';
+    await document.fonts.ready;
+    const prepared = new Map();
+    const elements = document.querySelectorAll('[data-pretext]');
+    for (const element of elements) prepared.set(element, prepare(element.textContent, getComputedStyle(element).font));
+    function relayout() {
+      for (const [element, handle] of prepared) {
+        const lineHeight = parseFloat(getComputedStyle(element).lineHeight) || 24;
+        const result = layout(handle, element.clientWidth, lineHeight);
+        element.style.minHeight = `${result.height}px`;
+      }
+    }
+    new ResizeObserver(relayout).observe(document.body);
+    relayout();
+  </script>
 </body>
 </html>

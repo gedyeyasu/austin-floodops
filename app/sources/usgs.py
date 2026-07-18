@@ -15,18 +15,7 @@ def _parse_usgs_time(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-async def fetch_usgs_observations(site_id: str, parameter_codes: str) -> list[FloodEvent]:
-    params = {
-        "format": "json",
-        "sites": site_id,
-        "parameterCd": parameter_codes,
-        "siteStatus": "all",
-    }
-    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
-        response = await client.get(USGS_IV_URL, params=params)
-        response.raise_for_status()
-        payload: dict[str, Any] = response.json()
-
+def parse_usgs_observations(payload: dict[str, Any], site_id: str, parameter_codes: str, *, mode: str = "live") -> list[FloodEvent]:
     events: list[FloodEvent] = []
     for series in payload.get("value", {}).get("timeSeries", []):
         source_info = series.get("sourceInfo", {})
@@ -43,8 +32,10 @@ async def fetch_usgs_observations(site_id: str, parameter_codes: str) -> list[Fl
         observed_at = _parse_usgs_time(latest["dateTime"])
         unit = variable.get("unit", {}).get("unitCode")
         label = variable.get("variableDescription") or variable.get("variableName") or "USGS observation"
+        parameter = variable.get("variableCode", [{}])[0].get("value") or parameter_codes
         events.append(
             FloodEvent(
+                event_id=f"usgs-{site_id}-{parameter}-{observed_at.isoformat()}",
                 source="usgs",
                 observed_at=observed_at,
                 kind="water_observation",
@@ -56,7 +47,21 @@ async def fetch_usgs_observations(site_id: str, parameter_codes: str) -> list[Fl
                 unit=unit,
                 provenance_url=f"{USGS_IV_URL}?sites={site_id}&parameterCd={parameter_codes}",
                 raw=series,
-                mode="live",
+                mode=mode,
             )
         )
     return events
+
+
+async def fetch_usgs_observations(site_id: str, parameter_codes: str) -> list[FloodEvent]:
+    params = {
+        "format": "json",
+        "sites": site_id,
+        "parameterCd": parameter_codes,
+        "siteStatus": "all",
+    }
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        response = await client.get(USGS_IV_URL, params=params)
+        response.raise_for_status()
+        payload: dict[str, Any] = response.json()
+    return parse_usgs_observations(payload, site_id, parameter_codes)
