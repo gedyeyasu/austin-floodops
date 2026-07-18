@@ -1,0 +1,1 @@
+"""Live public-data adapters."""
