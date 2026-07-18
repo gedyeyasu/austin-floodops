@@ -1,0 +1,64 @@
+{
+  "verified_at": "2026-07-18T23:22:41Z",
+  "environment": "Docker Compose application plus local Redpanda Kafka-compatible broker",
+  "scenario": "gage-rise-with-warning replay",
+  "result": "passed",
+  "events": 5,
+  "decision": {
+    "model": "nvidia/nemotron-3-nano-30b-a3b",
+    "risk": "catastrophic",
+    "policy": "approval_required",
+    "citation_count": 3,
+    "citations_grounded_in_input": true,
+    "citation_validation": {
+      "status": "model_text_references_grounded",
+      "source": "model_text_references",
+      "note": "This Nemotron deployment wrote three exact input event identifiers in its rationale while serializing an empty citations array. The adapter normalized only those exact model-written identifiers and did not fill missing evidence."
+    }
+  },
+  "kafka": {
+    "status": "verified",
+    "published": 5,
+    "consumed": 5,
+    "fallback": 0,
+    "event_ids": [
+      "nws-rise-001",
+      "nws-rise-002",
+      "usgs-rise-001",
+      "usgs-rise-002",
+      "usgs-rise-003"
+    ]
+  },
+  "hiddenlayer": {
+    "status": "scanned_with_findings",
+    "boundaries_scanned": [
+      "ingested_content",
+      "user_prompt_memory",
+      "model_request",
+      "tool_call",
+      "tool_result",
+      "final_answer"
+    ],
+    "fired_signals": ["pii"],
+    "note": "The non-blocking finding is surfaced in the security record; the separate adversarial smoke test fired prompt_injection and was quarantined."
+  },
+  "supabase_probe": {
+    "status": "verified",
+    "http_status": 200
+  },
+  "osrm_probe": {
+    "status": "verified",
+    "distance_m": 8118.1,
+    "duration_s": 538.3
+  },
+  "hiddenlayer_probe": {
+    "status": "verified",
+    "adversarial_status": "quarantined",
+    "adversarial_policy": "blocked",
+    "adversarial_signal": "prompt_injection"
+  },
+  "automated_tests": {
+    "passed": 50,
+    "failed": 0
+  }
+}

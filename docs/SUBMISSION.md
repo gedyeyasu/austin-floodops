@@ -1,46 +1,51 @@
-# Austin FloodOps - Submission v0.3.0 Enterprise Gov-Grade
+# Austin FloodOps submission package
 
-## Deployment
-- Docker: `make docker-build && make docker-run` serves FastAPI on :8080 with Redpanda Kafka-compatible broker at redpanda:29092 local, localhost:19092 host. Health at /health probes 16 integrations.
-- Compose env: KAFKA_BOOTSTRAP_SERVERS=redpanda:29092 PLAINTEXT local; prod uses SASL_SSL with KAFKA_USERNAME/PASSWORD. App mounts floodops-data volume for SQLite authoritative queue, replay fixtures read-only.
-- Dockerfile healthcheck curl /health, installs `.[streaming,supabase,test]` with pyjwt.
-- OpenShell policy openshell/austin-floodops.yaml version 1: include_workdir true, filesystem read_only /app/data/replay /app/app/static /usr /lib, read_write /app/data /tmp /app/logs, landlock best_effort, process run_as_user sandbox, network public-evidence read-only allows api.weather.gov waterservices.usgs.gov data.austintexas.gov router.project-osrm.org integrate.api.nvidia.com for python binaries. Additional tenant-specific HiddenLayer, Supabase, Kafka policies are deployment overlays.
+## Track
 
-## Tracks & Integrations
-We integrate all sponsor tracks with explicit gates:
-- NemoClaw/OpenShell: container via OpenShell sandbox policy, approval boundary, reversible actions, none auto-dispatched. Policy artifact in openshell/.
-- HiddenLayer: optional Interactions API scan of Nemotron input/output, fail-closed blocked returns quarantine. Probe endpoint /api/integrations/hiddenlayer/probe.
-- Red Hat Streams/Kafka: EventBus publish with idempotency, consume for evidence replay, probe /api/integrations/kafka/probe publishing stored events and consuming back. Local compose uses Redpanda v23.3.6 image.
-- Supabase: optional mirror Store via REST, SQLite remains authoritative if unavailable. Probe /api/integrations/supabase/probe checks events table. Deployment migration at supabase/migrations/20260718000000_initial_floodops_ledger.sql.
-- NVIDIA Nemotron: primary hosted inference OpenAI-compatible at integrate.api.nvidia.com/v1 chat/completions, response_format json_object, temperature 0.0 retry, non-JSON handling. Fallback vLLM self-hosted OpenAI-compatible: app/model/vllm.py assess_incident_vllm probes /v1/models then /v1/chat/completions via /api/integrations/vllm/probe.
-- Austin open data: austin cross-ings q3y8-2xnm limit 50, road closures fw5i-n4te fallback, floodplain 3p2e-ps67.geojson fallback synthetic polygons Onion Shoal Barton. Ingest adds parallel tasks austin_crossings + austin_roads with degraded handling.
-- OSRM routing: _osrm_route calls OSRM_BASE_URL /route/v1/driving/{lon},{lat};{lon},{lat}?overview=full&geometries=geojson&steps=true, compute_evacuation_routes for blocked crossings, haversine fallback.
-- Leaflet map in dashboard: ensureMap(), renderMap() circle markers severe red moderate amber low green with popups, fitBounds, floodplain GeoJSON layer via loadFloodplain().
+Primary: **Red Hat Live Data**. The qualifying mechanism is the autonomous thirty-second heartbeat over live public feeds; Kafka is an optional stream transport, not a track requirement.
 
-## Enterprise Features 0.3.0
-- Config: VLLM_BASE_URL VLLM_MODEL VLLM_API_KEY JWT_SECRET ENABLE_RBAC OSRM_BASE_URL ENABLE_PREDICTION ENABLE_AUDIT_CHAIN has_vllm has_osrm.
-- Auth: Role viewer operator supervisor admin auditor system, ROLE_RANK, ACTION_ROLES viewer view, operator assess, supervisor approve, admin admin, auditor audit_read, system bypass. bearer_scheme, _decode_token pyjwt HS256, current_actor returns system when ENABLE_RBAC false demo, require_role require_action create_token.
-- AuditChain: table audit_chain(id, incident_id, prev_hash, hash, event_type, actor_id, actor_role, payload, created_at), SHA256(prev_hash+payload+timestamp), genesis last_hash append list_for_incident list_recent verify_chain walking full chain checking prev linkage and hash recomputed.
-- Prediction: GagePoint observed_at value_ft, ForecastPoint horizon predicted_at value_ft confidence, GageForecast site_id points slope intercept r_squared method, _linear_regression OLS ft/hour, forecast_gage last 20 obs last 12h filtered sort, R2 heuristic, confidence decay with horizon, clamping. Risk: GAGE_THRESHOLDS_FT low5 moderate8 high11 catastrophic13 to score piecewise linear, _alert_signal flash flood emergency 1.0 warning 0.9, risk_trajectory combining alert 0.5 gage 0.5 synergy memory boost. model.py PredictionPoint horizon predicted_at gage_ft gage_confidence risk_level risk_score impact evidence_ids, PredictionResult incident_id generated_at site_id forecast trajectory points method predict_future extracts gage observations normalizing m to ft skipping cfs, calls forecast_gage, risk_trajectory, loops adding synthetic gage event for impact simulation per horizon via simulate_impact threshold-v1.
-- Routing: RoutePoint lon lat name, EvacuationRoute route_id origin dest distance duration geometry steps method blocked_crossings_avoided, _osrm_route httpx get, fallback haversine distance R6371, compute_evacuation_routes handles origins from blocked_crossings dict lat lon plus safe destinations high ground Austin Convention Center 30.2672 -97.7431 North Austin shelter.
-- After-action: generate_after_action_report incident_id store audit_chain decision, builds timeline from events sorted observed plus decision point, feedback memories filtered incident, compliance evidence_cited provenance preserved approval gate reversible audit verified, metrics evidence_count unique_sources risk confidence feedback memory audit_entries time_to_decision_seconds, FOIA package redacts raw_model_response, retention sqlite authoritative audit chain foia_ready, positive_change_narrative referencing human authority, learning, accountability.
-- Service: audit_chain optional field default None __post_init__ init AuditChain if ENABLE_AUDIT_CHAIN, create wires audit, _audit helper append if chain and enabled, evidence_ingested audit on new events, decision_created after save, security_blocked on HiddenLayer block, assessment_failed on Nemotron+vLLM both fail, approved rejected feedback memory_created delivery prediction_generated after_action_generated memory_retired. vLLM fallback: try assess_incident Nemotron, except IntegrationUnavailable if has_vllm try assess_incident_vllm else error audit. record_delivery wraps Store and audit, record_prediction audit. 2-arg init preserved for tests.
-- Main: version 0.3.0 Enterprise Gov-Grade description, 16 integrations health, endpoints POST /api/predict GET /api/floodplain POST /api/routing/detour GET /api/audit/recent /api/audit/{id} /api/audit/verify/{id} POST /api/after-action/{id} POST /api/auth/token GET /api/auth/me POST /api/integrations/vllm/probe osrm/probe plus legacy. Auth dependencies require_action view assess approve reject feedback retire_memory deliver_cap webeoc predict routing audit_read audit_verify after_action admin. TokenRequest sub role expires_minutes, PredictRequest mode scenario_id incident_id horizons site_id memory_boost, RoutingRequest blocked_crossings origins destinations osrm_base_url. Prediction logs audit via record_prediction. Floodplain fetches via fetch_floodplain. Routing via compute_evacuation_routes. Audit recent verifies via chain. After-action via generate_after_action_report audits after_action_generated.
-- Static: index.html expanded enterprise controls, RBAC quick switch sub role select getTokenAs setAuthToken clear token, decision-actions predict routing after-action, panels map #map Leaflet 340px tile OSM, prediction-grid 5 columns, routing-box, audit-box audit-list, after-action full + pre, security console vLLM status, learning, integration gate 16 probes, auth panel. JS globals runPrediction runRouting loadFloodplain refreshAudit generateAfterAction setAuthToken getTokenAs ensureMap renderMap verifyCurrentAudit probeVLLM probeOSRM retireMemory plus legacy runScenario runLive runEvaluation approveCurrent rejectCurrent etc. authHeaders Bearer, localStorage af-jwt, request wrapper.
+Secondary technical strengths: Recursive Intelligence and HiddenLayer Runtime Security.
 
-## Tests
-- pytest -q passes 21 tests still: audit_chain optional ensures FloodOpsService(local, Store) 2 args works, heartbeat fixed run_cycle returns dict cycles new_events sources consecutive_failures last_error decision_outcome, flexible __init__, ingest added austin_crossings austin_roads tasks not breaking status dict handling, pyproject has pyjwt.
+## 150–300 word submission description
 
-## Evidence
-- Data replay fixtures in data/replay: flash-flood-warning-only, gage-rise-with-warning, all-clear-scenario jsonl with FloodEvent provenance URLs.
-- NWS/USGS live calls with User-Agent, timeouts, degraded handling.
-- Supabase schema at supabase/migrations + schema.sql fallback, probes.
+Flood responders often have to correlate weather alerts, river-gage readings, crossing conditions, road closures, and local reports across separate systems while conditions change by the minute. Austin FloodOps is a persistent decision-support agent for emergency-operations personnel. Every thirty seconds it gathers fresh public evidence from the National Weather Service, the United States Geological Survey, and City of Austin sources, preserves timestamps and provenance, deduplicates unchanged records, and reacts only when the evidence changes.
 
-## Loom
-- See LOOM_SCRIPT.md for 3-min demo covering timeline map, decision approval gate, prediction, routing, audit chain verify, after-action FOIA, RBAC token switch, vLLM/OSRM probes, Docker/OpenShell policy.
+New evidence is treated as untrusted. HiddenLayer scans six boundaries across ingestion, memory, model requests, proposed tool calls, tool results, and final output. NVIDIA Nemotron produces one structured recommendation containing risk, confidence, a reversible action, and exact evidence references grounded against the input. The adapter normalizes only identifiers the model actually wrote and fails closed when the required grounded references are absent. A deterministic policy prevents automatic dispatch and requires a human operator to approve or reject consequential actions. Operator corrections become versioned playbook rules that can be retrieved during later incidents, with a controlled evaluation comparing behavior before and after learning.
 
-## Repository state
-- Dockerfile, docker-compose.yml, .dockerignore recreated, pyproject.toml has pyjwt, app/config.py enterprise fields, app/auth.py, model/vllm.py, storage/audit.py, prediction/*, sources/austin.py austin_floodplain.py, simulation/routing.py, responders/after_action.py, service.py heavily modified, main.py v0.3.0, static/index.html expanded, heartbeat fixed, ingest Austin tasks, openshell yaml v1, docs architecture svg etc, Makefile docker targets, .env.example enterprise vars.
+When configured, a Kafka-compatible broker round-trips new records through publish and consume before assessment; Docker Compose provides this locally through Redpanda. Supabase mirrors the local SQLite ledger. A real NemoClaw/OpenShell sandbox proof uses managed Nemotron inference and demonstrates deny-by-default egress containment. Austin FloodOps does not claim to predict flood inundation or replace incident command. Its goal is to reduce coordination delay between fragmented live evidence and a safe, cited, auditable human decision.
 
-## FOIA / Gov-grade
-- No secrets logged, provenance preserved, approval gated reversible, audit chain SHA256 tamper-evident verifiable, after-action FOIA package redacts internal reasoning, retention declarative, approval and delivery idempotent.
+## Required submission fields
+
+- Project title: Austin FloodOps
+- Team name: Austin FloodOps
+- Team members, roles, and contact details: **ADD BEFORE SUBMISSION**
+- Loom URL, two to five minutes, camera on: **ADD BEFORE SUBMISSION**
+- Public repository URL: **MAKE PUBLIC ONLY AFTER CREDENTIAL ROTATION AND HISTORY CLEANUP**
+- Deployed URL or working-application capture: **ADD BEFORE SUBMISSION**
+
+## Reproduction
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e '.[texas,test]'
+cp .env.example .env
+.venv/bin/pytest -q
+.venv/bin/uvicorn app.main:app --port 8080
+```
+
+For the local Kafka-compatible path:
+
+```bash
+docker compose up --build
+make stream-smoke
+make openshell-smoke
+```
+
+## Known limitations
+
+- The impact calculation is a transparent screening model, not a hydraulic inundation model.
+- LCRA, TxDOT, and Austin endpoints may be unavailable or return unsupported formats; they remain visibly degraded with no synthetic live fallback.
+- WebEOC is a standards-oriented preview adapter and has no agency authorization or production credentials.
+- Resource assignment and routing are prototypes and require agency data and acceptance testing.
+- The recursive evaluation is controlled harness evidence, not a production-accuracy claim.
+- vLLM does not qualify for its bounty unless a real self-hosted endpoint is configured and used in the recorded loop.

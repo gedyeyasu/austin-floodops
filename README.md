@@ -1,82 +1,259 @@
-# Austin FloodOps
+# Austin FloodOps v0.3.0
 
-Austin FloodOps is a decision-support service for flood operations. It gathers official National Weather Service alerts and USGS instantaneous observations, records their provenance, asks NVIDIA Nemotron for one structured recommendation, and keeps any action approval-gated and reversible.
+Approval-gated, audit-chained, AI-assisted decision support for flood emergency operations. Built for the AITX Community x NVIDIA Claw Agent Hackathon (July 17–19, 2026).
 
-The current vertical slice is real-data-first:
+**Primary track:** Red Hat Live Data · **Secondary:** Recursive Intelligence · **Security:** HiddenLayer Runtime Security
 
-- `DATA_MODE=live` calls the public NWS and USGS APIs and will not fabricate evidence.
-- Nemotron uses NVIDIA's OpenAI-compatible hosted endpoint. If no key is configured, the assessment is explicitly blocked.
-- A persistent FastAPI heartbeat polls NWS and USGS every 30 seconds, deduplicates stable event IDs, and sends only new evidence through the complete assessment pipeline. Per-source failures are visible without stopping later cycles.
-- SQLite stores events, decisions, feedback, heartbeat state, and versioned playbook rules locally; Supabase mirrors operational records when configured.
-- Operator corrections are reflected into structured Nemotron playbook rules, ranked against later evidence, injected into the next assessment, and individually retirable.
-- `app/streaming/kafka.py` is the real Red Hat Streams/Kafka producer/consumer path. Configure the broker and call `POST /api/integrations/kafka/probe` to verify a publish/consume round trip.
-- `openshell/austin-floodops.yaml` is the restrictive sandbox policy artifact: public evidence and NVIDIA inference are allowlisted, credentials are narrowed, and actions default to deny.
-- `POST /api/simulate` runs the deterministic `threshold-v1` impact model against live or replay evidence. It estimates screening exposure, depth, route delay, and priority crossings; it is not a hydraulic forecast and every assumption is returned in the response.
-- `GET /api/decisions/{incident_id}/cap` exports a standards-based CAP 1.2 message. `POST /api/decisions/{incident_id}/first-responder` can send it to a configured responder webhook only after the decision is approved and the request includes `confirm=true`; delivery is idempotent.
-- `POST /api/decisions/{incident_id}/webeoc` is the primary Texas responder adapter. It submits the approved CAP payload through TDEM WebEOC's documented SOAP `AddData` operation; it remains blocked until an authorized board/position/incident configuration is present.
-- HiddenLayer is an optional runtime scan of the Nemotron interaction. Set its tenant-specific Interactions URL and key to enable fail-closed scanning. NemoClaw/OpenShell remains provider-managed: the sandbox policy does not expose raw inference credentials.
-- Deployment target: run the API/agent in a NemoClaw/OpenShell container (Brev is preferred for the NVIDIA demo) and use Supabase Postgres/Realtime for the durable ledger. The linked Supabase project should deploy `supabase/migrations/20260718000000_initial_floodops_ledger.sql`; `supabase/schema.sql` remains a readable manual fallback. Do not deploy the FastAPI process to Supabase, and never put its service-role key in browser code.
-- `/api/integrations/supabase/probe` verifies the server-side REST connection. Assessments and feedback dual-write to Supabase when configured, while SQLite remains authoritative if the remote service is unavailable.
-- `DATA_MODE=replay` uses checked-in scenarios for repeatable tests and demos. Replay is always labeled replay.
+## What It Does
 
-## Run locally
+Austin FloodOps watches live public incident feeds, produces one typed recommendation with citations and provenance, and keeps every consequential action approval-gated and reversible. Its evaluation harness measures whether operator-approved memory changes later recommendations; it does not assume every correction improves the model.
+
+It is **not** a hydraulic flood model or autonomous dispatcher. It is an operational decision-support prototype over public NWS, USGS, and City of Austin evidence. The WebEOC component is an unconnected interoperability adapter, not an authorized government integration.
+
+## Architecture
+
+```text
+NWS Alerts + USGS Gage + Austin Crossings + Road Closures
+            |
+            v
+    Heartbeat Engine (30s poll, dedup, failure recovery)
+            |
+    Kafka-compatible stream when configured
+    (publish → consume → assess; direct fallback is explicit)
+            |
+    HiddenLayer v2 SDK  (6 boundary scans)
+            |
+    NVIDIA Nemotron 3 Nano  (structured JSON incident decision)
+            |
+    Policy Gate  (approval-required, reversible-only, quarantine-safe)
+            |
+    SQLite + Supabase  (events, decisions, feedback, versioned memories, audit chain)
+            |
+    Dashboard  (Leaflet map, event timeline, learning panel, eval chart, security console)
+```
+
+## Sponsor Integrations
+
+| Integration | Status | How It's Used |
+|---|---|---|
+| **NVIDIA Nemotron 3 Nano** | Runtime-verified | Structured incident assessment via the hosted NVIDIA endpoint; the gate turns verified only after a successful decision |
+| **HiddenLayer Runtime Security** | Runtime-verified | Six-boundary scan with pre-model prompt-injection quarantine; the gate reports the last real scan |
+| **NemoClaw / OpenShell** | Sandbox-only | Checked-in sandbox policy and deny evidence; Docker Compose alone does not enforce it |
+| **Kafka-compatible streaming** | Local Compose | Redpanda provides the Kafka protocol; `make stream-smoke` must prove publish → consume before assessment |
+| **Supabase** | Optional mirror | Remote probe plus best-effort mirror; SQLite remains authoritative if Supabase is unavailable |
+| **vLLM** | Optional fallback | Counts only when a real self-hosted endpoint is configured and used |
+
+## Data Sources
+
+| Source | Endpoint | What It Provides |
+|---|---|---|
+| NWS Alerts | `api.weather.gov/alerts/active?area=TX` | Flash flood warnings, watches, emergency alerts |
+| USGS Water Services | `waterservices.usgs.gov/nwis/iv/` | Gage height, streamflow at Colorado River site 08158000 |
+| Austin Low-Water Crossings | `data.austintexas.gov/d/q6kt-v2zm` | 70+ crossing locations with gate types and gage numbers |
+| Austin Road Closures | `data.austintexas.gov/resource/fw5i-n4te.json` | Real-time road closure status |
+| LCRA Hydromet | `hydromet.lcra.org` | Attempted river-stage source; visibly degraded when unavailable |
+| TxDOT DriveTexas | `drivetexas.org` | Attempted closure source; visibly degraded when unavailable |
+
+Public source adapters do not require API keys. Unavailable sources are marked degraded and never replaced with synthetic live records. Replay fixtures are labeled and provide deterministic demonstrations.
+
+## Quick Start
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e '.[test]'
+.venv/bin/pip install -e '.[texas,test]'
 cp .env.example .env
 .venv/bin/pytest -q
 .venv/bin/uvicorn app.main:app --reload --port 8080
 ```
 
-Open <http://127.0.0.1:8080>. The integration panel distinguishes configured services from verified services. Set `NVIDIA_API_KEY` or `NVIDIA_INFERENCE_API_KEY` in `.env` to enable live Nemotron assessment.
+Open <http://127.0.0.1:8080>. The dashboard shows the integration gate, event timeline, incident workspace, learning panel, evaluation chart, and security console.
 
-## Test the project
+**Minimum for live assessment:** set `NVIDIA_API_KEY` in `.env`.
+**Minimum for Kafka:** set `KAFKA_BOOTSTRAP_SERVERS`.
+**Minimum for HiddenLayer:** set `HIDDENLAYER_CLIENT_ID` and `HIDDENLAYER_CLIENT_SECRET`.
 
-Run the complete test suite:
-
-```bash
-make test
-```
-
-Run the deterministic end-to-end smoke path:
-
-```bash
-make smoke
-```
-
-Then open <http://127.0.0.1:8080>. The operations console exposes the event timeline, approval boundary, retrieved memories, correction history, evaluation metrics, security decisions, and every required degraded state. **Run live scan** uses the real NWS/USGS feeds and NVIDIA Nemotron; it is blocked if the NVIDIA endpoint is unavailable.
-
-The smoke output reports the Supabase probe separately. A `404` from `/rest/v1/events` means the project is configured but the migration has not been deployed. Supabase GitHub integration must use the repository root (`.`) as its working directory and deploy the `supabase/migrations/` directory.
-
-## Demo path
-
-Start the server and execute the credential-free three-scenario learning evaluation in one command:
+## Demo Path
 
 ```bash
 make demo
 ```
 
-The evaluation runs in an isolated temporary ledger and leaves the dashboard server open until you press Ctrl-C. It compares the same three scenarios before and after an operator-derived rule, reporting accuracy, latency, and intervention count without writing to live Supabase, Kafka, HiddenLayer, or dispatch integrations. Set `DEMO_ONESHOT=true` when a script should run the evaluation and exit. The dashboard also exposes the same evaluation through `POST /api/evaluation/run`.
+Starts the server with the autonomous heartbeat enabled and leaves the dashboard open. Use the labeled replay controls for the deterministic learning demonstration:
 
-For an individual replay assessment using the real configured Nemotron endpoint, call:
+1. **Run 1** (no memory) — baseline accuracy, latency, interventions
+2. **Run 2** (after operator correction) — improved accuracy, fewer interventions
+3. **Comparison** — accuracy delta, latency delta, intervention delta
 
-```bash
-curl -s http://127.0.0.1:8080/api/assess \
-  -H 'content-type: application/json' \
-  -d '{"mode":"replay","scenario_id":"gage-rise-with-warning"}'
-```
+The evaluation runs only when an operator clicks **Run learning evaluation**; loading the page does not mutate evaluation state.
 
-Run the impact simulation without an NVIDIA key:
+## Testing
 
 ```bash
-curl -s http://127.0.0.1:8080/api/simulate \
-  -H 'content-type: application/json' \
-  -d '{"mode":"replay","scenario_id":"gage-rise-with-warning","horizon_minutes":60}'
+make test         # Unit and service-flow tests
+make smoke        # Local API smoke: health + replay + security + configured probes
+make stream-smoke # Docker Compose Redpanda publish/consume verification on port 18081 by default
+make preflight   # Dependency status: NVIDIA, Kafka, Supabase, HiddenLayer, WebEOC, vLLM, OSRM
 ```
 
-The replay still requires a real NVIDIA key for an assessment. Without one, the service returns the evidence and a clear integration-blocked state; it never swaps in a mock model response.
+## Key Endpoints
 
-## Project plan
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/health` | GET | Integration gate that distinguishes configured from verified |
+| `/api/heartbeat` | GET | Heartbeat state: cycle count, source status, last decision |
+| `/api/assess` | POST | Gather events → Nemotron assessment → policy gate → store |
+| `/api/simulate` | POST | Deterministic threshold-v1 impact model |
+| `/api/evaluation/run` | POST | 3-scenario before/after comparison with accuracy/latency metrics |
+| `/api/memories` | GET | Versioned playbook rules with tags and confidence |
+| `/api/memory/{id}/retire` | POST | Retire a harmful or outdated rule |
+| `/api/security/adversarial-test` | POST | Inject prompt injection, verify quarantine |
+| `/api/decisions/{id}/approve` | POST | Operator approves reversible action |
+| `/api/decisions/{id}/reject` | POST | Operator rejects proposed action |
+| `/api/decisions/{id}/cap` | GET | Export CAP 1.2 XML |
+| `/api/decisions/{id}/first-responder` | POST | Send CAP to webhook (requires confirm + approval) |
+| `/api/decisions/{id}/webeoc` | POST | Send CAP through a WebEOC SOAP adapter only when agency-issued credentials and explicit approval are present |
+| `/api/decisions/{id}/feedback` | POST | Record operator correction → reflection → memory extraction |
+| `/api/integrations/kafka/probe` | POST | Kafka publish/consume round-trip |
+| `/api/integrations/hiddenlayer/probe` | POST | HiddenLayer scan verification |
+| `/api/integrations/supabase/probe` | POST | Supabase REST connection verification |
+| `/api/integrations/vllm/probe` | POST | vLLM endpoint verification |
+| `/api/integrations/osrm/probe` | POST | OSRM routing verification |
+| `/api/predict` | POST | Gage trajectory forecast with risk scoring |
+| `/api/routing/detour` | POST | OSRM-based evacuation detour around blocked crossings |
+| `/api/audit/recent` | GET | Recent audit chain entries |
+| `/api/audit/{id}` | GET | Audit trail for specific incident |
+| `/api/audit/verify/{id}` | GET | Verify audit chain integrity |
+| `/api/after-action/{id}` | POST | Generate after-action report |
+| `/api/resources` | GET/POST | Fictional exercise inventory workflow; no agency asset connection |
+| `/api/export/events.csv` | GET | Evidence CSV draft for records-officer review |
+| `/api/export/decisions.csv` | GET | Decision CSV draft for records-officer review |
+| `/api/decisions/{id}/edxl-de` | GET | Unvalidated EDXL-DE-shaped interoperability draft |
+| `/api/decisions/{id}/foia` | GET | Backward-compatible route for a draft records bundle; no release or retention determination |
+| `/api/auth/token` | POST | JWT token issuance |
+| `/api/auth/me` | GET | Current actor and role |
 
-See [HACKATHON_PLAN.md](HACKATHON_PLAN.md) for the gstack decision record, track fit, integration gates, and the remaining sponsor adapters.
+## Learning Mechanism
+
+1. **Operator correction** → `POST /api/decisions/{id}/feedback`
+2. **Nemotron reflection** → extracts structured PlaybookRule (trigger, action, rationale, confidence, context_tags)
+3. **Tag-based ranking** → retrieves most relevant rules for current evidence
+4. **Memory-augmented prompt** → injected into next Nemotron assessment
+5. **Evaluation harness** → compares the baseline and memory-assisted runs without assuming improvement
+6. **Retirement** → harmful or outdated rules can be individually retired
+
+## Security
+
+- **HiddenLayer v2 SDK** scans 6 boundaries per assessment: ingested content, user prompt/memory, model request, tool call, tool result, and final answer
+- **Prompt injection quarantine** — poisoned events are blocked before reaching the model
+- **Fail-closed security** — unavailable security scans block the decision path; unavailable data sources remain visible as degraded
+- **RBAC** — optional JWT-based role-based access control (viewer, operator, supervisor, admin, and auditor); the internal system role cannot be issued by the token endpoint
+- **Audit chain** — append-only log of every event, decision, approval, feedback, and memory change with verification
+- **No secrets in client** — all API keys stay server-side; never logged or sent to browser
+
+## OpenShell Policy
+
+`openshell/austin-floodops.yaml` defines the restrictive sandbox:
+
+- **Filesystem:** read-only replay data, read-write data directory and tmp
+- **Process:** runs as sandbox user/group
+- **Network:** only declared public-data, model, routing, and local-inference hosts are allowlisted
+- **Credentials:** narrowed to sandbox scope; inference keys are provider-managed
+
+The external sandbox proof is intentionally separate from the Docker application health. Run `make openshell-smoke` to execute one managed Nemotron request through `inference.local` and verify that OpenShell denies an undeclared outbound host. The dashboard stays unverified for OpenShell unless the application itself is launched through a configured gateway.
+
+## Configuration
+
+See `.env.example` for all 50+ configuration fields. Key groups:
+
+| Group | Variables | Purpose |
+|---|---|---|
+| Runtime | `APP_ENV`, `DATA_MODE`, `HOST`, `PORT`, `DB_PATH` | Server configuration |
+| Data Sources | `NWS_USER_AGENT`, `USGS_SITE_ID`, `POLL_SECONDS` | Public data feeds |
+| NVIDIA | `NVIDIA_API_KEY`, `NEMOTRON_MODEL` | Primary AI assessment |
+| vLLM | `VLLM_BASE_URL`, `VLLM_MODEL` | Fallback inference |
+| Kafka | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_TOPIC` | Event bus |
+| Supabase | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Remote persistence |
+| HiddenLayer | `HIDDENLAYER_CLIENT_ID`, `HIDDENLAYER_CLIENT_SECRET` | Runtime security |
+| WebEOC | `WEBEOC_API_URL`, `WEBEOC_USERNAME` | Texas responder adapter |
+| RBAC | `JWT_SECRET`, `AUTH_BOOTSTRAP_TOKEN`, `ENABLE_RBAC` | Explicit role policy; secure token minting requires two independent 32+ character secrets |
+| Features | `ENABLE_PREDICTION`, `ENABLE_AUDIT_CHAIN` | Feature toggles |
+
+## Deployment
+
+- **Local:** `make run` starts the FastAPI server with hot reload
+- **Docker:** `make docker-build && make docker-run`
+- **NemoClaw/OpenShell:** must run through the actual sandbox for the policy to be enforced
+- **Supabase:** deploy `supabase/migrations/20260718000000_initial_floodops_ledger.sql` for remote ledger
+
+## Project Structure
+
+```text
+app/
+├── main.py              # FastAPI app: 30+ routes, lifespan heartbeat
+├── config.py            # 50+ settings from env vars
+├── models.py            # Pydantic v2: FloodEvent, IncidentDecision, PlaybookRule, etc.
+├── service.py           # FloodOpsService orchestrator: gather → assess → approve → feedback
+├── auth.py              # JWT/RBAC: Actor, Role, token creation
+├── model/
+│   ├── nemotron.py      # NVIDIA Nemotron adapter (prompt injection defenses, retry)
+│   └── vllm.py          # vLLM OpenAI-compatible fallback
+├── sources/
+│   ├── nws.py           # NWS active alerts (api.weather.gov)
+│   ├── usgs.py          # USGS instantaneous water observations
+│   ├── austin.py        # Austin low-water crossings + road closures
+│   ├── austin_floodplain.py  # Austin floodplain GeoJSON
+│   ├── lcra.py          # LCRA Hydromet water data
+│   └── txdot.py         # TxDOT road conditions
+├── streaming/
+│   ├── ingest.py        # collect_live() gathers all sources, replay() reads JSONL
+│   ├── heartbeat.py     # Autonomous 30s poll with dedup, failure recovery
+│   └── kafka.py         # Red Hat Streams/Kafka producer/consumer
+├── storage/
+│   ├── sqlite.py        # Local SQLite: events, decisions, feedback, memories, audit, resources
+│   ├── supabase.py      # Remote Supabase REST adapter
+│   └── audit.py         # Append-only audit chain with verification
+├── safety/
+│   └── policy.py        # Approval gate: reversible + operator-approved only
+├── security/
+│   └── hiddenlayer.py   # HiddenLayer v2 SDK: six-boundary deep scan
+├── learning/
+│   ├── reflection.py    # Nemotron extracts PlaybookRule from operator feedback
+│   └── memory.py        # Tag-based memory ranking and retrieval
+├── evaluation/
+│   └── runner.py        # 3-scenario before/after comparison harness
+├── simulation/
+│   ├── model.py         # threshold-v1 deterministic impact model
+│   └── routing.py       # OSRM evacuation detour computation
+├── prediction/
+│   ├── model.py         # Prediction data models
+│   ├── gage_forecast.py # Linear regression gage trajectory
+│   └── risk_predictor.py # Risk scoring with memory boost
+├── responders/
+│   ├── cap.py           # CAP 1.2 XML builder + webhook sender
+│   ├── webeoc.py        # WebEOC SOAP AddData adapter; organization contract required
+│   ├── after_action.py  # After-action report generator
+│   └── foia.py          # Draft records-review CSV and EDXL-DE-shaped exports
+└── static/
+    └── index.html       # Operations dashboard: map, timeline, learning, security, and approvals
+
+data/replay/
+├── east-austin-night-market.jsonl       # Original demo scenario
+├── flash-flood-warning-only.jsonl       # 3 NWS warnings (expected: high risk)
+├── gage-rise-with-warning.jsonl         # 2 warnings + 3 gage observations (expected: catastrophic)
+└── all-clear-scenario.jsonl             # Cancelled warnings + falling gage (expected: low)
+
+tests/                    # Automated tests: heartbeat, evaluation, memory, sources, streaming, service flow, policy, storage, CAP
+openshell/                # OpenShell sandbox policy
+scripts/                  # demo.sh, smoke.sh
+supabase/                 # Schema + migrations
+```
+
+## Texas Case Study
+
+Named scenario: "East Austin Night Market opens in 40 minutes; a crossing is becoming unsafe."
+
+Motivated by the catastrophic July 4, 2025 Kerr County/Hill Country flash flood. This prototype demonstrates how approval-gated coordination over public NWS and USGS evidence, plus an unconnected downstream interoperability adapter, could reduce the delay between signal and action.
+
+## License
+
+Built for the AITX Community x NVIDIA Claw Agent Hackathon. See [HACKATHON_PLAN.md](HACKATHON_PLAN.md) for the full decision record.

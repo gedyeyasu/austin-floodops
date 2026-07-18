@@ -1,0 +1,14 @@
+{
+  "observed_at": "2026-07-18T21:57:32Z",
+  "total_observed_events": 40,
+  "sources": {
+    "nws": {"status": "ok", "events": 16},
+    "usgs": {"status": "ok", "events": 2},
+    "austin_crossings": {"status": "ok", "events": 22},
+    "austin_roads": {"status": "degraded", "events": 0, "reason": "public endpoint returned HTTP 404"},
+    "lcra": {"status": "degraded", "events": 0, "reason": "public endpoint unavailable"},
+    "txdot": {"status": "degraded", "events": 0, "reason": "DriveTexas response was not valid JSON for the adapter"},
+    "austin_311": {"status": "degraded", "events": 0, "reason": "public endpoint unavailable"}
+  },
+  "live_mode_policy": "Unavailable adapters produce no synthetic replacement events."
+}

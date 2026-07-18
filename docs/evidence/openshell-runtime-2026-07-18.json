@@ -1,0 +1,22 @@
+{
+  "verified_at": "2026-07-18T23:22:41Z",
+  "sandbox": "austin-floodops",
+  "phase": "Ready",
+  "driver": "docker",
+  "openshell_version": "0.0.72",
+  "managed_inference": {
+    "status": "verified",
+    "route": "https://inference.local/v1/chat/completions",
+    "model": "nvidia/nemotron-3-super-120b-a12b",
+    "response_marker": "FLOODOPS_SANDBOX_OK",
+    "thinking_disabled": true
+  },
+  "deny_by_default_egress": {
+    "status": "verified",
+    "test_host": "example.com:443",
+    "http_status": 403,
+    "process_exit_status": 22,
+    "nemoclaw_result": "recent network policy denial detected"
+  },
+  "scope_note": "This is an external NemoClaw/OpenShell runtime proof. The Docker web application remains separate and does not report OpenShell as verified unless it is actually wired to a gateway."
+}

@@ -1,1 +1,1 @@
-{"status":"verified","published":1,"consumed":0,"event_ids":[]}
+{"verified_at":"2026-07-18T21:57:32Z","status":"verified","published":1,"consumed":1,"event_ids":["austin-crossing-21-1c700c3017e5"],"detail":"Producer and consumer observed the same event IDs."}

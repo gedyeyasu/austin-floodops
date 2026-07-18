@@ -64,13 +64,13 @@ JavaScript Object Notation, abbreviated J S O N, is the key-and-value text forma
 
 Comma-Separated Values, abbreviated C S V, is a simple table format suitable for spreadsheets and records exports.
 
-Freedom of Information Act, abbreviated F O I A, is a United States federal public-records law. Texas state records are more precisely governed by the Texas Public Information Act. The dashboard uses the familiar F O I A label for a records bundle, but it should not be presented as a legal certification or retention guarantee.
+Freedom of Information Act, abbreviated F O I A, is a United States federal public-records law. Texas state records are more precisely governed by the Texas Public Information Act. The dashboard calls this output a records-review bundle. Its legacy application route still ends in slash F O I A for backward compatibility, but the bundle is not a release decision, legal certification, or retention guarantee.
 
 Open Source Routing Machine, abbreviated O S R M, is a routing engine used to calculate road routes.
 
 Progressive Web Application, abbreviated P W A, means a web application that can install a service worker and cache content for degraded or offline use. A service worker is browser code that sits between the page and the network.
 
-Indexed Database, normally written IndexedDB, is a browser-local database. Austin FloodOps uses it for an experimental offline approval queue.
+Indexed Database, normally written IndexedDB, is a browser-local database. Austin FloodOps uses it to preserve offline action drafts that always require reconfirmation.
 
 FirstNet is the First Responder Network Authority and the nationwide public-safety broadband network. The project is designed with degraded connectivity in mind, but it is not currently certified by or directly integrated with FirstNet.
 
@@ -119,7 +119,7 @@ When the FastAPI web server starts, it creates a heartbeat engine. FastAPI is th
 
 The application publishes new events to Kafka if a broker is configured. This is currently an additional publish path, not the central conveyor belt of the whole application. The assessment is still called directly from the heartbeat after collection. The code contains a real producer and consumer and a probe endpoint, but the checked-in probe evidence shows one record published and zero consumed. Present that as a proven producer connection, not a proven end-to-end consumer round trip.
 
-Before model reasoning, the project can send ingested content to HiddenLayer. If a prompt-injection signal fires, the unsafe evidence is quarantined before the model sees it. The checked-in evidence includes both a clean scan and a malicious-document scan that fired a prompt-injection signal. The code also attempts scans at the user-prompt-and-memory, model-request, tool-call, tool-result, and final-answer boundaries. Some individual post-model scan errors are logged and the code continues to a fallback scan, so do not claim mathematically perfect fail-closed coverage of every network failure.
+Before model reasoning, the project sends ingested evidence, retrieved memory, and the exact model request to HiddenLayer. If a prompt-injection signal fires or a configured scan cannot complete, inference does not start. After inference, it scans the proposed tool call, deterministic simulation result, and final answer. The decision is verified only when all six boundaries completed. Any missing configured output scan blocks the action, and a prompt-injection signal in model output quarantines that output after inference.
 
 The learning retriever then selects up to three active playbook rules whose words and tags overlap the current evidence. These rules are context, not executable code. The model receives a prompt containing at most the newest eight evidence items and the retrieved rules. It must return a JSON object containing summary, risk, confidence, action, target, rationale, and citations. The parser rejects unknown risk levels and unknown action types.
 
@@ -206,7 +206,7 @@ Parameter code zero zero zero six five means gage height. Parameter code zero ze
 
 Normalization matters because the rest of the system can process one event type instead of understanding every agency's schema. Provenance matters because an operator must be able to ask, “Where did this number come from?”
 
-The live collector also attempts Austin low-water-crossing data, Austin road closures, Lower Colorado River Authority stages, Texas Department of Transportation closures, and Austin three-one-one reports. The National Weather Service and United States Geological Survey paths are real public endpoints. The Lower Colorado River Authority and Texas Department of Transportation adapters currently create synthetic fallback records if their attempted live endpoints fail. Those fallback records are a demo mechanism and must never be described as observed government facts. The current FloodEvent source enumeration also labels some of those records as Austin because it lacks distinct Lower Colorado River Authority and Texas Department of Transportation source values. That should be fixed before production.
+The live collector also attempts Austin low-water-crossing data, Austin road closures, Lower Colorado River Authority stages, Texas Department of Transportation closures, and Austin three-one-one reports. Every successful record carries a distinct source and provenance. If an attempted source is unavailable or cannot be parsed, the heartbeat marks it degraded and creates no replacement record. Synthetic examples exist only in clearly labeled replay fixtures.
 
 ## Chapter 7 — The deterministic simulation, step by step
 
@@ -319,7 +319,7 @@ Run adversarial payload sends a known prompt-injection payload to the security t
 
 Reset view to run one clears the current dashboard selection and redraws baseline metrics. It does not delete events, decisions, feedback, rules, or audit entries.
 
-The quick role switch has a subject field, a role list, Get token as role, Set token, and Clear token. Get token as role asks the server for a demonstration JSON Web Token. Set token stores a pasted token in browser memory. Clear token removes it. When `ENABLE_RBAC=false`, the server treats requests as the system role, so the selector is mostly visual. Real permission testing requires `ENABLE_RBAC=true` and a strong secret instead of the development default.
+The quick role switch has a subject field, a role list, an optional bootstrap-secret field, Get token as role, Set token, and Clear token. Get token as role asks the server for a demonstration JSON Web Token. The server never issues its internal system role. When `ENABLE_RBAC=false`, the server treats requests as the system role, so the selector is mostly visual. When role-based access control is enabled, token minting requires independent JSON Web Token and bootstrap secrets of at least thirty-two characters. Permission checks use the explicit action-to-role table; a similarly ranked but unlisted role cannot inherit another role's authority.
 
 ## Chapter 13 — Dashboard guided tour: decision controls
 
@@ -333,17 +333,17 @@ Run prediction sends either the current incident evidence or a new live batch to
 
 Compute detour sends blocked crossing information to the routing endpoint. If the configured Open Source Routing Machine returns a route, the response includes distance, duration, road geometry, and steps. If it fails, the code draws a straight line between origin and destination, calculates great-circle distance with the haversine formula, and assumes ten meters per second. That fallback is not a drivable or flood-safe route.
 
-After-action report assembles the incident timeline, decision, feedback, metrics, compliance notes, and a redacted records package. It is a generated draft, not an agency-approved after-action report.
+After-action report assembles the incident timeline, decision, feedback, metrics, mechanical control checks, and a redacted records package. It is a generated draft, not an agency-approved after-action report or a compliance certification.
 
 ## Chapter 14 — Dashboard guided tour: map, audit, records, and resources
 
-Load floodplain GeoJSON requests floodplain polygons from Austin open data. GeoJSON means geographic JavaScript Object Notation. If the live geometry cannot be parsed, the adapter returns synthetic rectangles with a fallback label. Those rectangles are not official boundaries.
+Load floodplain GeoJSON requests floodplain polygons from Austin open data. GeoJSON means geographic JavaScript Object Notation. If the source is unavailable or the geometry cannot be parsed, the endpoint returns a degraded error response instead of drawing synthetic live boundaries.
 
 Refresh map from events draws any event with latitude and longitude. Leaflet is the browser mapping library. OpenStreetMap provides map tiles. Events without coordinates do not appear as points.
 
 Refresh recent audit loads the newest hash-chain entries. Verify chain recalculates links for the current incident or ledger and reports whether they connect. Again, this is tamper-evident, not an externally notarized audit system.
 
-Export Events CSV produces a table of normalized evidence. Export Decisions CSV produces a table of recommendations. Export EDXL-DE creates an emergency-exchange envelope. FOIA Bundle combines Common Alerting Protocol, Emergency Data Exchange Language, and table exports. These exporters help demonstrate interoperability and records packaging, but the current Emergency Data Exchange Language output is a prototype and has not been shown to pass an official conformance suite.
+Export Events CSV produces a table of normalized evidence. Export Decisions CSV produces a table of recommendations. Export EDXL-DE creates an emergency-exchange-shaped draft. Records Bundle combines Common Alerting Protocol Test output, an Emergency Data Exchange Language-shaped draft, and table exports. These exporters demonstrate interoperability and records packaging, but the output has not passed an official conformance suite or a records-officer review.
 
 Refresh Resources loads a locally seeded list of twelve demonstration resources such as barricades and crews. Assign Nearest to Incident is misnamed in the current interface: it chooses the first available resource, then submits a hard-coded distance of twelve hundred meters and estimated arrival of fifteen minutes. It does not calculate true proximity. Release All releases every currently assigned resource shown by the page.
 
@@ -351,11 +351,11 @@ Load Texas Data Fabric loads events and heartbeat status from the existing colle
 
 ## Chapter 15 — Dashboard guided tour: offline and integration probes
 
-Check Service Worker plus Offline Queue reports whether the browser service worker is registered and lists IndexedDB queue entries. The service worker caches the dashboard and successful read requests. When a real approve or reject request fails because the browser is offline, it places the action in IndexedDB.
+Check Service Worker plus Offline Queue reports whether the browser service worker is registered and lists IndexedDB draft entries. The service worker caches the dashboard and public heartbeat state, but never authenticated application programming interface responses. When a real approve or reject request fails because the browser is offline, it stores only an action draft in IndexedDB.
 
-Test Offline Approval Queue does not actually disconnect the network. It directly writes a test approval into IndexedDB. This validates browser storage only.
+Test Offline Approval Queue does not actually disconnect the network. It directly writes a test action draft into IndexedDB. This validates browser storage only.
 
-The service worker listens for a browser background-sync event and tries to post queued approvals later. However, the replayed request does not restore the original authorization header, and browser support for background sync varies. This feature needs security, identity, conflict, expiry, and user-interface work before field use. It is not a FirstNet integration.
+The service worker deliberately has no background-sync path for approvals or rejections. A draft cannot change server policy state. After connectivity returns, an authenticated operator must review current evidence and confirm again. This is not a FirstNet integration.
 
 Probe v L L M calls the configured fallback server's model-list endpoint and a chat-completions ping. It reports unconfigured, verified, degraded, or blocked behavior.
 
@@ -369,11 +369,11 @@ NVIDIA Nemotron provides language reasoning over mixed evidence and operator rul
 
 NVIDIA Inference Microservices or NVIDIA's hosted compatible endpoint provides the model-serving interface. The application sends chat-completions requests and expects structured JSON.
 
-NemoClaw and OpenShell provide the secure runtime story. The checked-in evidence shows a ready `austin-floodops` sandbox, healthy routed NVIDIA inference, OpenShell version zero point zero point seventy-two, an allowlist for official data hosts, and a denied connection to an unapproved host. The project repository contains the declarative policy. The local Docker Compose file by itself does not enforce that OpenShell policy.
+NemoClaw and OpenShell provide the secure runtime story. The repository contains a declarative `austin-floodops` policy and evidence files from prior allow-and-deny checks. Those files must be refreshed for the submission. The local Docker Compose file by itself does not enforce the OpenShell policy.
 
-HiddenLayer provides runtime model-interaction scanning. Checked-in evidence shows a benign scan with no fired signals and an adversarial scan firing prompt injection. It complements OpenShell: HiddenLayer analyzes content; OpenShell constrains what the process can access or send.
+HiddenLayer provides runtime model-interaction scanning. The repository contains prior benign and adversarial scan outputs, but the runtime gate is authoritative because event credentials can expire. HiddenLayer complements OpenShell: HiddenLayer analyzes content; OpenShell constrains what the process can access or send.
 
-Red Hat Streams for Apache Kafka provides a durable event backbone. It is useful when many collectors, normalizers, model workers, dashboards, and archives must operate independently. Kafka preserves event order within partitions and lets consumers resume from offsets. The current app publishes normalized events but still assesses them in-process. A production architecture would make assessment and persistence explicit Kafka consumers.
+Red Hat Streams for Apache Kafka is Red Hat's supported Kafka distribution. Kafka is useful when collectors, normalizers, model workers, dashboards, and archives must operate independently. Kafka preserves event order within partitions and lets consumers resume from offsets. When a Kafka-compatible broker is configured, the current app publishes each new event, consumes and validates it, matches its identifier, and uses the consumed object for assessment. If no broker is configured, the runtime reports the direct path explicitly. The Red Hat Live Data track requires genuinely updating data, not a Red Hat-hosted Kafka service.
 
 The local Docker Compose stack uses Redpanda, which is Kafka-compatible, so developers can test without a remote Red Hat cluster. A production Red Hat listener commonly uses encrypted Transport Layer Security plus Simple Authentication and Security Layer credentials. Red Hat's [secure-client guide](https://docs.redhat.com/en/documentation/red_hat_streams_for_apache_kafka/3.1/html/developing_kafka_client_applications/assembly-kafka-secure-config-str) explains matching client and broker security settings.
 
@@ -404,7 +404,7 @@ To enable secured Kafka, configure broker addresses, topic, security protocol, a
 
 To enable Supabase, deploy the repository migration to the linked project, set the project address and server-only service-role key, then call the Supabase probe. SQLite remains available if the remote write fails.
 
-To enable HiddenLayer, supply either the current software-development-kit client identifier and secret or the tenant-specific legacy interaction endpoint and key. Credentials may expire. Run the benign probe and adversarial test and save evidence.
+To enable the fail-closed six-boundary HiddenLayer path, supply the current software-development-kit client identifier and client secret. Legacy interaction credentials cannot produce a six-boundary verified result. Credentials may expire, so run both the benign probe and adversarial test before presenting.
 
 To enable WebEOC, an authorized emergency-management administrator must provide a service account, position, incident, board, and input view. Do not invent or scrape those values.
 
@@ -428,7 +428,7 @@ Press Run learning evaluation. Explain that it is a deterministic harness provin
 
 If you show prediction, explicitly show method and freshness. Because the current replay may be older than twelve hours, say: “The forecaster correctly filtered stale gage observations, but the rest of the replay pipeline did not use the same freshness rule. That inconsistency is a known engineering task.” This converts a potential judge objection into evidence that you understand the system.
 
-End with the real next step: calibrate station-specific thresholds and hydraulic relationships with local agencies, make Kafka the actual event backbone, remove synthetic fallback from live mode, implement geospatial resource selection, validate standards exports, and complete an authorized responder pilot.
+End with the real next step: calibrate station-specific thresholds and hydraulic relationships with local agencies, validate standards exports, replace demo resources with an authorized asset integration, harden the durable stream for multiple workers, and complete a supervised responder pilot.
 
 ## Chapter 19 — Questions judges may ask
 
@@ -438,17 +438,17 @@ If asked whether thirteen feet is dangerous everywhere, answer: “No. Gage heig
 
 If asked whether the artificial-intelligence model predicts water depth, answer: “No. Nemotron explains evidence and proposes actions. The displayed depth is currently a transparent screening proxy, not a hydraulic result.”
 
-If asked whether the data is real, answer: “National Weather Service and United States Geological Survey live paths are real. Replay data is labeled replay. Some new Texas adapters currently fall back to synthetic demo records, which we will remove from production live mode.”
+If asked whether the data is real, answer: “Successful live National Weather Service, United States Geological Survey, and Austin records are real and carry provenance. Replay data is labeled. Unavailable optional Texas feeds are shown as degraded and never replaced with fabricated live observations.”
 
 If asked whether the system can close a road, answer: “No. It proposes a reversible action, requires human approval, and has optional downstream message adapters. Operational authority remains with the agency.”
 
 If asked why use a language model, answer: “The numerical simulator is transparent but narrow. The language model can synthesize heterogeneous evidence and operator playbooks into a cited explanation. Deterministic code still validates its output and controls action.”
 
-If asked why Kafka, answer: “Kafka decouples sources from consumers, buffers bursts, preserves retryable events, and lets assessment, mapping, archival, and notification scale independently. The current code proves publishing, but consumer-driven orchestration is the next step.”
+If asked why Kafka, answer: “Kafka decouples sources from consumers, buffers bursts, preserves retryable events, and lets assessment, mapping, archival, and notification scale independently. The configured path now proves publish, consume, schema validation, and assessment with matching event identifiers.”
 
 If asked whether the audit chain guarantees compliance, answer: “No. It makes local edits detectable. Real compliance needs identity controls, retention policy, access review, external anchoring, and agency governance.”
 
-If asked whether this is production ready, answer: “It is an end-to-end working technical prototype with real data and real sponsor integrations. It is not yet an operational life-safety system. The remaining work is calibration, authorization, standards validation, reliability engineering, and field testing.”
+If asked whether this is production ready, answer: “It is an end-to-end working technical prototype with real data and runtime-verifiable sponsor code paths. It is not yet an operational life-safety system. The remaining work is calibration, authorization, standards validation, reliability engineering, and field testing.”
 
 ## Chapter 20 — The expert summary
 
@@ -458,6 +458,6 @@ Official and local sources create observations. Adapters normalize them. The hea
 
 Its most defensible innovation is not a claim that artificial intelligence can foresee every flood. It is the combination of live evidence, transparent calculation, secure model reasoning, human authority, responder interoperability, and auditability in one demonstration.
 
-Its most important limitations are equally clear: the simulation is not hydraulic, prediction is a short straight-line extrapolation, some live adapters can synthesize fallbacks, replay freshness is inconsistent, resource assignment is not truly nearest, offline mode is not FirstNet integration, role enforcement is disabled by default, and responder delivery is not authorized merely because code exists.
+Its most important limitations are equally clear: the simulation is not hydraulic, prediction is a short straight-line extrapolation, some optional live adapters may be degraded, replay freshness differs from live freshness, resource assignment uses a demo inventory, offline mode is not FirstNet integration, role enforcement is disabled by default, and responder delivery is not authorized merely because code exists.
 
 Knowing both halves—the working architecture and its boundaries—is what will let you present the project like an expert.
