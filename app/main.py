@@ -12,6 +12,7 @@ from app.responders.webeoc import WebEOCConfig, WebEOCUnavailable, send_to_webeo
 from app.security.hiddenlayer import HiddenLayerUnavailable, scan_interaction
 from app.service import FloodOpsService
 from app.streaming.kafka import KafkaUnavailable
+from app.storage.supabase import SupabaseUnavailable
 
 
 app = FastAPI(title="Austin FloodOps", version="0.1.0")
@@ -88,6 +89,16 @@ async def hiddenlayer_probe() -> dict:
         )
         return {"status": "verified", "result": result}
     except HiddenLayerUnavailable as exc:
+        return {"status": "blocked", "detail": str(exc)}
+
+
+@app.post("/api/integrations/supabase/probe")
+async def supabase_probe() -> dict:
+    if not settings.has_supabase:
+        return {"status": "unconfigured", "detail": "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."}
+    try:
+        return await service.supabase().probe()
+    except SupabaseUnavailable as exc:
         return {"status": "blocked", "detail": str(exc)}
 
 
@@ -168,4 +179,9 @@ async def feedback(incident_id: str, payload: OperatorFeedback) -> dict:
     if decision is None:
         raise HTTPException(status_code=404, detail="Incident not found")
     feedback_id = service.feedback(incident_id, payload)
+    if settings.has_supabase:
+        try:
+            await service.supabase().save_feedback(incident_id, payload)
+        except SupabaseUnavailable:
+            pass
     return {"feedback_id": feedback_id, "memory": payload.correction}

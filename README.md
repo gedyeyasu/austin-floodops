@@ -14,6 +14,7 @@ The current vertical slice is real-data-first:
 - `POST /api/decisions/{incident_id}/webeoc` is the primary Texas responder adapter. It submits the approved CAP payload through TDEM WebEOC's documented SOAP `AddData` operation; it remains blocked until an authorized board/position/incident configuration is present.
 - HiddenLayer is an optional runtime scan of the Nemotron interaction. Set its tenant-specific Interactions URL and key to enable fail-closed scanning. NemoClaw/OpenShell remains provider-managed: the sandbox policy does not expose raw inference credentials.
 - Deployment target: run the API/agent in a NemoClaw/OpenShell container (Brev is preferred for the NVIDIA demo) and use Supabase Postgres/Realtime for the durable ledger. Apply `supabase/schema.sql` after creating the project; do not deploy the FastAPI process to Supabase, and never put its service-role key in browser code.
+- `/api/integrations/supabase/probe` verifies the server-side REST connection. Assessments and feedback dual-write to Supabase when configured, while SQLite remains authoritative if the remote service is unavailable.
 - `DATA_MODE=replay` uses the checked-in East Austin scenario only for repeatable tests and demos. Replay is always labeled replay.
 
 ## Run locally

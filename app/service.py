@@ -11,6 +11,7 @@ from app.security.hiddenlayer import HiddenLayerConfig, HiddenLayerUnavailable, 
 from app.safety.policy import PolicyResult, evaluate
 from app.simulation.model import simulate_impact
 from app.storage.sqlite import Store
+from app.storage.supabase import SupabaseConfig, SupabaseStore, SupabaseUnavailable
 from app.streaming.ingest import collect_live, replay
 from app.streaming.kafka import EventBus, KafkaConfig, KafkaUnavailable
 
@@ -43,6 +44,18 @@ class FloodOpsService:
             project=self.settings.hiddenlayer_project,
         )
 
+    def supabase(self) -> SupabaseStore:
+        return SupabaseStore(SupabaseConfig(url=self.settings.supabase_url, service_role_key=self.settings.supabase_service_role_key))
+
+    async def _remote_write(self, operation) -> None:
+        if not self.settings.has_supabase:
+            return
+        try:
+            await operation(self.supabase())
+        except SupabaseUnavailable:
+            # Local SQLite remains authoritative during a remote outage.
+            pass
+
     async def gather(self, mode: str, scenario_id: str) -> list[FloodEvent]:
         if mode == "replay":
             path = Path(__file__).resolve().parents[1] / "data" / "replay" / f"{scenario_id}.jsonl"
@@ -64,6 +77,7 @@ class FloodOpsService:
         events = await self.gather(mode, scenario_id)
         if events:
             self.store.save_events(events)
+            await self._remote_write(lambda remote: remote.save_events(events))
         if not events:
             return [], None, "No events received from configured sources."
         try:
@@ -89,6 +103,7 @@ class FloodOpsService:
         decision.raw_model_response.setdefault("memory_context", retrieval_context(self.store))
         decision.policy_status = evaluate(decision).status  # type: ignore[misc]
         self.store.save_decision(decision)
+        await self._remote_write(lambda remote: remote.save_decision(decision))
         return events, decision, None
 
     def approve(self, decision: IncidentDecision) -> PolicyResult:
@@ -98,7 +113,10 @@ class FloodOpsService:
         return result
 
     def feedback(self, incident_id: str, feedback: OperatorFeedback) -> int:
-        return self.store.add_feedback(incident_id, feedback)
+        feedback_id = self.store.add_feedback(incident_id, feedback)
+        # Feedback is recorded locally synchronously; the remote mirror is
+        # scheduled by the endpoint because this method is intentionally sync.
+        return feedback_id
 
     def simulate(self, events: list[FloodEvent], *, mode: str, scenario_id: str, horizon_minutes: int):
         return simulate_impact(events, mode=mode, scenario_id=scenario_id, horizon_minutes=horizon_minutes)

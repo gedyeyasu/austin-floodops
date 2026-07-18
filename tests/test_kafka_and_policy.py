@@ -6,6 +6,7 @@ from app.models import FloodEvent
 from app.safety.policy import evaluate
 from app.streaming.kafka import EventBus, KafkaConfig, KafkaUnavailable
 from app.responders.webeoc import WebEOCConfig, add_data_envelope
+from app.storage.supabase import SupabaseConfig, SupabaseStore, SupabaseUnavailable
 
 
 def test_kafka_without_config_fails_closed():
@@ -42,3 +43,11 @@ def test_webeoc_envelope_contains_add_data_contract_without_network_call():
     assert b"AddData" in payload
     assert b"Incident Intake" in payload
     assert b"&lt;alert /&gt;" in payload
+
+
+def test_supabase_without_credentials_fails_closed():
+    store = SupabaseStore(SupabaseConfig())
+    assert not store.config.configured
+    import asyncio
+    with pytest.raises(SupabaseUnavailable):
+        asyncio.run(store.probe())
