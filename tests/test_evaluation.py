@@ -12,7 +12,17 @@ from app.storage.sqlite import Store
 
 @pytest.mark.asyncio
 async def test_evaluation_compares_all_scenarios_and_improves(tmp_path):
-    local = replace(settings, db_path=tmp_path / "evaluation.sqlite3", kafka_bootstrap_servers="", supabase_url="", supabase_service_role_key="", hiddenlayer_interactions_url="", hiddenlayer_api_key="")
+    local = replace(
+        settings,
+        db_path=tmp_path / "evaluation.sqlite3",
+        kafka_bootstrap_servers="",
+        supabase_url="",
+        supabase_service_role_key="",
+        hiddenlayer_interactions_url="",
+        hiddenlayer_api_key="",
+        hiddenlayer_client_id="",
+        hiddenlayer_client_secret="",
+    )
     service = FloodOpsService(local, Store(local.db_path))
     result = await EvaluationRunner(service).run()
     assert result["status"] == "completed"

@@ -29,18 +29,23 @@ def parse_nws_alerts(payload: dict[str, Any], limit: int = 20, *, mode: str = "l
         longitude = latitude = None
         if geometry.get("type") == "Point" and isinstance(coords, list) and len(coords) >= 2:
             longitude, latitude = coords[:2]
+        observed_at = _parse_datetime(properties.get("sent") or properties.get("effective"))
+        official_url = str(feature.get("id") or "")
+        if not official_url.startswith("http"):
+            official_url = NWS_ALERTS_URL
         events.append(
             FloodEvent(
                 event_id=str(properties.get("id") or feature.get("id") or f"nws-{properties.get('sent')}-{event_name}-{properties.get('areaDesc')}"),
                 source="nws",
-                observed_at=_parse_datetime(properties.get("sent") or properties.get("effective")),
+                observed_at=observed_at,
                 kind="weather_alert",
                 title=event_name,
                 severity=str(properties.get("severity") or "unknown").lower(),
                 location=properties.get("areaDesc"),
                 latitude=latitude,
                 longitude=longitude,
-                provenance_url=properties.get("id") or NWS_ALERTS_URL,
+                freshness_seconds=max(0.0, (datetime.now(timezone.utc) - observed_at).total_seconds()),
+                provenance_url=official_url,
                 raw=feature,
                 mode=mode,
             )

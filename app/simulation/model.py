@@ -63,7 +63,8 @@ def simulate_impact(events: list[FloodEvent], *, mode: str, scenario_id: str, ho
     gage, has_gage = _gage_signal(events)
     synergy = 0.1 if alert and has_gage else 0.0
     score = _clamp(0.6 * alert + 0.4 * gage + synergy)
-    confidence = _clamp(0.35 + (0.25 if alert else 0.0) + (0.25 if has_gage else 0.0) + min(0.15, 0.05 * max(0, len(events) - 2)))
+    hazard_events = [event for event in events if event.kind in {"weather_alert", "water_observation", "road_closure", "311_report"}]
+    confidence = _clamp(0.35 + (0.25 if alert else 0.0) + (0.25 if has_gage else 0.0) + min(0.15, 0.05 * max(0, len(hazard_events) - 2)))
     warning = next((event for event in events if event.kind == "weather_alert"), None)
     location = warning.location if warning and warning.location else "the observed flood area"
     crossings = [f"Priority low-water crossings near {location}"] if score >= 0.4 else []

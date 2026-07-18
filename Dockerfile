@@ -17,7 +17,7 @@ COPY pyproject.toml README.md ./
 COPY app/__init__.py app/__init__.py
 
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e ".[texas]"
+    pip install --no-cache-dir -e ".[texas,test]"
 
 # Copy full source
 COPY app/ app/

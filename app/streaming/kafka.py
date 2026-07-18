@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Iterator
 
 from app.models import FloodEvent
 
+logger = logging.getLogger("austin_floodops.kafka")
+
 
 class KafkaUnavailable(RuntimeError):
     """Raised when the configured Kafka broker cannot be used."""
+
+
+def decode_event(value: bytes) -> FloodEvent:
+    """Decode and validate one broker record at the stream trust boundary."""
+    payload = json.loads(value.decode("utf-8"))
+    return FloodEvent.model_validate(payload)
 
 
 @dataclass(frozen=True)
@@ -19,6 +28,7 @@ class KafkaConfig:
     sasl_mechanism: str = "PLAIN"
     username: str = ""
     password: str = ""
+    group_id: str = "austin-floodops-normalizer"
 
 
 class EventBus:
@@ -79,17 +89,26 @@ class EventBus:
                 sasl_mechanism=self.config.sasl_mechanism,
                 sasl_plain_username=self.config.username or None,
                 sasl_plain_password=self.config.password or None,
-                value_deserializer=lambda value: json.loads(value.decode("utf-8")),
+                # Decode in the loop so malformed records can be committed and
+                # skipped instead of permanently poisoning this consumer group.
+                value_deserializer=None,
                 consumer_timeout_ms=timeout_ms,
+                auto_offset_reset="earliest",
                 enable_auto_commit=False,
-                group_id="austin-floodops-normalizer",
+                group_id=self.config.group_id,
             )
         except Exception as exc:
             raise KafkaUnavailable(f"Kafka consumer could not connect: {exc}") from exc
         try:
             count = 0
             for message in consumer:
-                yield FloodEvent.model_validate(message.value)
+                try:
+                    event = decode_event(message.value)
+                except Exception as exc:
+                    logger.warning("Skipping malformed Kafka record after validation failure: %s", type(exc).__name__)
+                    consumer.commit()
+                    continue
+                yield event
                 consumer.commit()
                 count += 1
                 if count >= max_records:

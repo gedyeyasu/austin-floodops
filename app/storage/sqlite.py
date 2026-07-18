@@ -278,40 +278,85 @@ class Store:
             ).fetchone()
         return row is not None
 
+    def claim_delivery(self, incident_id: str, channel: str) -> bool:
+        """Atomically reserve one outbound delivery before making a remote call."""
+        with self._connect() as db:
+            cursor = db.execute(
+                "INSERT OR IGNORE INTO deliveries(incident_id, channel, response_status) VALUES (?, ?, -1)",
+                (incident_id, channel),
+            )
+            return cursor.rowcount == 1
+
+    def release_delivery_claim(self, incident_id: str, channel: str) -> None:
+        """Release only an unfinished reservation so an operator can retry."""
+        with self._connect() as db:
+            db.execute(
+                "DELETE FROM deliveries WHERE incident_id = ? AND channel = ? AND response_status = -1",
+                (incident_id, channel),
+            )
+
     def record_delivery(self, incident_id: str, channel: str, response_status: int) -> None:
         with self._connect() as db:
             db.execute(
-                "INSERT OR IGNORE INTO deliveries(incident_id, channel, response_status) VALUES (?, ?, ?)",
+                """INSERT INTO deliveries(incident_id, channel, response_status)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(incident_id, channel) DO UPDATE SET
+                       delivered_at = CURRENT_TIMESTAMP,
+                       response_status = excluded.response_status""",
                 (incident_id, channel, response_status),
             )
 
-    # --- Texas Gov Resource Management ---
+    # --- Local exercise resource inventory ---
     def _seed_texas_resources(self):
-        """Seed default Texas resources if table empty — barricades, high-water vehicles, shelters, personnel for Travis County / Austin EOC"""
+        """Seed a fictional Austin-area exercise inventory when the table is empty."""
         with self._connect() as db:
+            # Migrate only untouched legacy demo labels. This keeps existing local
+            # databases honest without overwriting operator-edited inventory.
+            legacy_labels = {
+                "barricade-001": ("Barricade Unit 1 - Onion Creek Crossing", "Onion Creek Blvd & E Stassney", "Standard flood barricade, reflective, TXDOT compliant", "Exercise Barricade 1 - Onion Creek", "Prototype staging near Onion Creek", "Fictional exercise asset; capability and compliance not verified"),
+                "barricade-002": ("Barricade Unit 2 - Shoal Creek", "Shoal Creek Blvd & Steck", "High-visibility barricade", "Exercise Barricade 2 - Shoal Creek", "Prototype staging near Shoal Creek", "Fictional exercise asset; capability not verified"),
+                "barricade-003": ("Barricade Unit 3 - Barton Springs", "Barton Springs Rd & Zilker", "Water-filled barricade", "Exercise Barricade 3 - Barton Springs", "Prototype staging near Barton Springs", "Fictional exercise asset; capability not verified"),
+                "barricade-004": ("Barricade Unit 4 - East 12th", "E 12th St @ Onion Creek", "Deployed during night market scenario", "Exercise Barricade 4 - East Austin", "Prototype East Austin location", "Fictional exercise deployment for the replay scenario"),
+                "hwv-001": ("High-Water Vehicle 1", "Austin EOC", "LMTV 6-person, high-water rescue", "Exercise High-Water Vehicle 1", "Prototype staging area A", "Fictional exercise asset; capacity is illustrative"),
+                "hwv-002": ("High-Water Vehicle 2", "Travis County Yard", "High-water rescue, swiftwater certified crew", "Exercise High-Water Vehicle 2", "Prototype staging area B", "Fictional exercise asset; crew capability not verified"),
+                "shelter-austin-se": ("Austin SE Shelter - Travis Co", "Austin SE, 30.25,-97.70", "200-person capacity, pet-friendly, ADA compliant", "Exercise Shelter A", "Prototype southeast Austin location", "Fictional exercise site; capacity and accessibility not verified"),
+                "shelter-dripping": ("Dripping Springs Shelter", "Dripping Springs, TX", "150-person, backup generator", "Exercise Shelter B", "Prototype southwest area location", "Fictional exercise site; capacity and generator not verified"),
+                "crew-001": ("Swiftwater Rescue Crew Alpha", "Austin Fire Dept", "4-person swiftwater rescue, certified", "Exercise Rescue Crew Alpha", "Prototype staging area A", "Fictional exercise crew; training and availability not verified"),
+                "crew-002": ("Traffic Control Crew Bravo", "Austin Transportation", "2-person traffic control, barricade trained", "Exercise Traffic Crew Bravo", "Prototype staging area B", "Fictional exercise crew; training and availability not verified"),
+                "gate-onion-1": ("Onion Creek Low-Water Gate", "Onion Creek, Austin", "Automated gate, remote close capable", "Exercise Onion Creek Gate", "Prototype location near Onion Creek", "Fictional exercise asset; no physical control connection"),
+                "pump-001": ("High-Volume Pump 1", "Austin Water", "1000 GPM, trailer mounted", "Exercise Pump 1", "Prototype staging area A", "Fictional exercise asset; flow rate and availability not verified"),
+            }
+            for resource_id, (old_name, old_location, old_notes, new_name, new_location, new_notes) in legacy_labels.items():
+                db.execute(
+                    """UPDATE resources
+                       SET name = ?, location = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+                       WHERE id = ? AND name = ? AND location = ? AND notes = ?""",
+                    (new_name, new_location, new_notes, resource_id, old_name, old_location, old_notes),
+                )
             count = db.execute("SELECT COUNT(*) as c FROM resources").fetchone()["c"]
             if count > 0:
                 return
-            # Texas resources: Austin area
+            # All names and capabilities below are fictional exercise data. They
+            # must never be interpreted as agency availability or certification.
             default_resources = [
                 # Barricades
-                ("barricade-001", "barricade", "available", "Barricade Unit 1 - Onion Creek Crossing", "Onion Creek Blvd & E Stassney", 30.185, -97.750, 0, None, None, None, "Standard flood barricade, reflective, TXDOT compliant"),
-                ("barricade-002", "barricade", "available", "Barricade Unit 2 - Shoal Creek", "Shoal Creek Blvd & Steck", 30.380, -97.738, 0, None, None, None, "High-visibility barricade"),
-                ("barricade-003", "barricade", "available", "Barricade Unit 3 - Barton Springs", "Barton Springs Rd & Zilker", 30.264, -97.768, 0, None, None, None, "Water-filled barricade"),
-                ("barricade-004", "barricade", "deployed", "Barricade Unit 4 - East 12th", "E 12th St @ Onion Creek", 30.270, -97.700, 0, "demo-incident", None, None, "Deployed during night market scenario"),
+                ("barricade-001", "barricade", "available", "Exercise Barricade 1 - Onion Creek", "Prototype staging near Onion Creek", 30.185, -97.750, 0, None, None, None, "Fictional exercise asset; capability and compliance not verified"),
+                ("barricade-002", "barricade", "available", "Exercise Barricade 2 - Shoal Creek", "Prototype staging near Shoal Creek", 30.380, -97.738, 0, None, None, None, "Fictional exercise asset; capability not verified"),
+                ("barricade-003", "barricade", "available", "Exercise Barricade 3 - Barton Springs", "Prototype staging near Barton Springs", 30.264, -97.768, 0, None, None, None, "Fictional exercise asset; capability not verified"),
+                ("barricade-004", "barricade", "deployed", "Exercise Barricade 4 - East Austin", "Prototype East Austin location", 30.270, -97.700, 0, "demo-incident", None, None, "Fictional exercise deployment for the replay scenario"),
                 # High-water vehicles
-                ("hwv-001", "high_water_vehicle", "available", "High-Water Vehicle 1", "Austin EOC", 30.2672, -97.7431, 6, None, None, None, "LMTV 6-person, high-water rescue"),
-                ("hwv-002", "high_water_vehicle", "available", "High-Water Vehicle 2", "Travis County Yard", 30.300, -97.700, 6, None, None, None, "High-water rescue, swiftwater certified crew"),
+                ("hwv-001", "high_water_vehicle", "available", "Exercise High-Water Vehicle 1", "Prototype staging area A", 30.2672, -97.7431, 6, None, None, None, "Fictional exercise asset; capacity is illustrative"),
+                ("hwv-002", "high_water_vehicle", "available", "Exercise High-Water Vehicle 2", "Prototype staging area B", 30.300, -97.700, 6, None, None, None, "Fictional exercise asset; crew capability not verified"),
                 # Shelters
-                ("shelter-austin-se", "shelter", "available", "Austin SE Shelter - Travis Co", "Austin SE, 30.25,-97.70", 30.25, -97.70, 200, None, None, None, "200-person capacity, pet-friendly, ADA compliant"),
-                ("shelter-dripping", "shelter", "available", "Dripping Springs Shelter", "Dripping Springs, TX", 30.190, -98.086, 150, None, None, None, "150-person, backup generator"),
+                ("shelter-austin-se", "shelter", "available", "Exercise Shelter A", "Prototype southeast Austin location", 30.25, -97.70, 200, None, None, None, "Fictional exercise site; capacity and accessibility not verified"),
+                ("shelter-dripping", "shelter", "available", "Exercise Shelter B", "Prototype southwest area location", 30.190, -98.086, 150, None, None, None, "Fictional exercise site; capacity and generator not verified"),
                 # Personnel
-                ("crew-001", "personnel", "available", "Swiftwater Rescue Crew Alpha", "Austin Fire Dept", 30.2672, -97.7431, 4, None, None, None, "4-person swiftwater rescue, certified"),
-                ("crew-002", "personnel", "available", "Traffic Control Crew Bravo", "Austin Transportation", 30.2672, -97.7431, 2, None, None, None, "2-person traffic control, barricade trained"),
+                ("crew-001", "personnel", "available", "Exercise Rescue Crew Alpha", "Prototype staging area A", 30.2672, -97.7431, 4, None, None, None, "Fictional exercise crew; training and availability not verified"),
+                ("crew-002", "personnel", "available", "Exercise Traffic Crew Bravo", "Prototype staging area B", 30.2672, -97.7431, 2, None, None, None, "Fictional exercise crew; training and availability not verified"),
                 # Gates
-                ("gate-onion-1", "gate", "available", "Onion Creek Low-Water Gate", "Onion Creek, Austin", 30.185, -97.750, 0, None, None, None, "Automated gate, remote close capable"),
+                ("gate-onion-1", "gate", "available", "Exercise Onion Creek Gate", "Prototype location near Onion Creek", 30.185, -97.750, 0, None, None, None, "Fictional exercise asset; no physical control connection"),
                 # Pumps
-                ("pump-001", "pump", "available", "High-Volume Pump 1", "Austin Water", 30.2672, -97.7431, 0, None, None, None, "1000 GPM, trailer mounted"),
+                ("pump-001", "pump", "available", "Exercise Pump 1", "Prototype staging area A", 30.2672, -97.7431, 0, None, None, None, "Fictional exercise asset; flow rate and availability not verified"),
             ]
             for r in default_resources:
                 db.execute(

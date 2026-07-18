@@ -1,7 +1,7 @@
 {
   "name": "Austin FloodOps - Great State of Texas",
   "short_name": "FloodOps TX",
-  "description": "Approval-gated live flood coordination for Texas - TDEM Ready, LCRA, TxDOT, Austin EOC",
+  "description": "Approval-gated live flood decision support for Texas public evidence",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#070b0a",
@@ -15,7 +15,7 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["government", "emergency", "utilities"],
+  "categories": ["utilities", "productivity"],
   "lang": "en-US",
   "dir": "ltr",
   "prefer_related_applications": false

@@ -1,6 +1,6 @@
 /*
-  Austin FloodOps Service Worker - PWA Offline FirstNet for Texas Field Ops
-  Gov-grade: offline-first, queues approvals in IndexedDB, syncs when back online
+  Austin FloodOps Service Worker - offline continuity prototype
+  Caches dashboard assets and preserves browser-local action drafts for review
   Lone Star State - Built for the Great State of Texas
 */
 const CACHE_NAME = 'floodops-v0.4.0-texas';
@@ -10,7 +10,6 @@ const CORE_ASSETS = [
   '/static/index.html',
   '/static/manifest.json',
   '/health',
-  '/api/events',
   '/api/heartbeat',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
@@ -41,7 +40,8 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// IndexedDB for offline approval queue - FirstNet field ops
+// IndexedDB for browser-local offline action drafts. Drafts are never executed
+// by the service worker; an authenticated operator must review them after reconnecting.
 const DB_NAME = 'floodops-offline-queue';
 const STORE_NAME = 'pending-approvals';
 
@@ -59,18 +59,17 @@ function openDB() {
   });
 }
 
-async function queueOfflineApproval(incident_id, action) {
+async function queueOfflineActionDraft(incident_id, action) {
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).put({
       incident_id,
-      action, // approve/reject
+      action,
       queued_at: new Date().toISOString(),
-      actor_id: 'field-operator-firstnet',
-      synced: false
+      status: 'requires_reconfirmation'
     });
-    console.log('[FloodOps SW] Queued offline', action, incident_id);
+    console.log('[FloodOps SW] Saved offline action draft', action, incident_id);
   } catch (e) {
     console.warn('[FloodOps SW] Queue failed', e);
   }
@@ -79,20 +78,22 @@ async function queueOfflineApproval(incident_id, action) {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // API requests - network First, fallback to cache, queue approvals offline
+  // API requests - network first. Failed approve/reject requests become local
+  // drafts only; the worker never replays a life-safety decision.
   if (url.pathname.startsWith('/api/')) {
     // For approve/reject, queue if offline
     if ((url.pathname.includes('/approve') || url.pathname.includes('/reject')) && event.request.method === 'POST') {
       event.respondWith(
         fetch(event.request.clone()).catch(async () => {
-          // Offline - queue
+          // Offline - preserve intent without changing server state.
           const incident_id = url.pathname.split('/')[3] || 'unknown';
           const action = url.pathname.includes('/approve') ? 'approve' : 'reject';
-          await queueOfflineApproval(incident_id, action);
+          await queueOfflineActionDraft(incident_id, action);
           return new Response(JSON.stringify({
-            status: 'queued_offline',
+            status: 'drafted_offline',
             incident_id,
-            detail: 'Offline - approval queued in IndexedDB for FirstNet sync when back online. Texas gov offline-first.',
+            detail: 'Offline action saved as a browser-local draft. Reconnect, review current evidence, authenticate, and confirm again.',
+            requires_reconfirmation: true,
             queued_at: new Date().toISOString()
           }), {headers: {'Content-Type': 'application/json'}});
         })
@@ -104,15 +105,23 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then(resp => {
-          // Cache successful GETs
-          if (event.request.method === 'GET' && resp.ok) {
+          // Cache only explicitly public heartbeat state. Never cache an
+          // authenticated API response or operator/incident records.
+          const mayCache = event.request.method === 'GET'
+            && resp.ok
+            && !event.request.headers.has('Authorization')
+            && url.pathname === '/api/heartbeat';
+          if (mayCache) {
             const clone = resp.clone();
             caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
           }
           return resp;
         })
         .catch(() => {
-          return caches.match(event.request).then(cached => {
+          const mayUseCache = event.request.method === 'GET'
+            && !event.request.headers.has('Authorization')
+            && url.pathname === '/api/heartbeat';
+          return (mayUseCache ? caches.match(event.request) : Promise.resolve(null)).then(cached => {
             if (cached) return cached;
             return new Response(JSON.stringify({error: 'Offline - cached data only, Texas field ops mode'}), {headers: {'Content-Type': 'application/json'}, status: 503});
           });
@@ -149,40 +158,4 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'floodops-sync-approvals') {
-    console.log('[FloodOps SW] Background sync approvals - FirstNet');
-    event.waitUntil(syncOfflineQueue());
-  }
-});
-
-async function syncOfflineQueue() {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const all = await new Promise((res, rej) => {
-      const req = store.getAll();
-      req.onsuccess = () => res(req.result);
-      req.onerror = () => rej(req.error);
-    });
-    for (const item of all) {
-      if (item.synced) continue;
-      try {
-        const resp = await fetch(`/api/decisions/${item.incident_id}/${item.action}`, {method: 'POST'});
-        if (resp.ok) {
-          item.synced = true;
-          item.synced_at = new Date().toISOString();
-          store.put(item);
-          console.log('[FloodOps SW] Synced queued', item.action, item.incident_id);
-        }
-      } catch (e) {
-        console.warn('[FloodOps SW] Sync failed for', item.incident_id, e);
-      }
-    }
-  } catch (e) {
-    console.warn('[FloodOps SW] Sync queue open failed', e);
-  }
-}
-
-console.log('[FloodOps SW] Loaded - Built for the Great State of Texas ⭐ TDEM Ready');
+console.log('[FloodOps SW] Loaded - Austin FloodOps interoperability prototype');

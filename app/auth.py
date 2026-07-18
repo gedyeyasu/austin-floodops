@@ -22,16 +22,7 @@ class Role(str, Enum):
     system = "system"
 
 
-ROLE_RANK: dict[Role, int] = {
-    Role.viewer: 0,
-    Role.operator: 1,
-    Role.supervisor: 2,
-    Role.admin: 3,
-    Role.auditor: 2,  # auditor rank similar to supervisor for read audit
-    Role.system: 99,
-}
-
-# Action -> minimal roles allowed. Enterprise gov-grade mapping.
+# Action -> minimal roles allowed for the prototype policy.
 ACTION_ROLES: dict[str, set[Role]] = {
     "view": {Role.viewer, Role.operator, Role.supervisor, Role.admin, Role.auditor, Role.system},
     "assess": {Role.operator, Role.supervisor, Role.admin, Role.system},
@@ -89,6 +80,11 @@ async def current_actor(credentials: HTTPAuthorizationCredentials | None = Depen
     # When RBAC disabled (demo mode), return system role to avoid friction.
     if not settings.enable_rbac:
         return Actor(sub="demo-system", role=Role.system)
+    if not settings.has_secure_auth:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Role-based access control is enabled but secure JWT and bootstrap secrets are not configured.",
+        )
     if credentials is None or not credentials.credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization header missing")
     return _decode_token(credentials.credentials)
@@ -99,17 +95,7 @@ def require_role(*allowed: Role):
 
     async def _check(actor: Actor = Depends(current_actor)) -> Actor:
         if actor.role not in allowed_set and actor.role != Role.system:
-            # also check rank: system bypass, admin bypass if allowed contains anything < admin?
-            # Strict: must be explicit unless system.
-            # But allow higher rank to pass for convenience: e.g., admin can do operator.
-            # We'll implement rank-based if actor rank >= max required rank OR role explicitly allowed.
-            # Simpler: if rank check passes and actor role rank >= min allowed rank?
-            # For gov-grade, we keep explicit but also allow rank escalation.
-            actor_rank = ROLE_RANK.get(actor.role, 0)
-            min_required_rank = min((ROLE_RANK.get(r, 0) for r in allowed_set), default=0)
-            if actor_rank < min_required_rank and actor.role != Role.system:
-                # final check: is actor role in ACTION_ROLES supermap? No.
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Role {actor.role} not permitted. Requires {', '.join(r.value for r in allowed_set)}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Role {actor.role} not permitted. Requires {', '.join(r.value for r in allowed_set)}")
         return actor
 
     return _check
@@ -120,14 +106,10 @@ def require_action(action: str):
 
     async def _check(actor: Actor = Depends(current_actor)) -> Actor:
         if actor.role not in roles and actor.role != Role.system:
-            # rank fallback: allow if rank >= minimal rank for this action
-            actor_rank = ROLE_RANK.get(actor.role, 0)
-            min_rank = min(ROLE_RANK.get(r, 0) for r in roles)
-            if actor_rank < min_rank:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Action '{action}' requires one of {', '.join(r.value for r in roles)}; got {actor.role}",
-                )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Action '{action}' requires one of {', '.join(r.value for r in roles)}; got {actor.role}",
+            )
         return actor
 
     return _check

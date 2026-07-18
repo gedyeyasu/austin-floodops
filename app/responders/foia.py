@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 from datetime import datetime, timezone
@@ -9,14 +10,25 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 from app.models import IncidentDecision, FloodEvent
 
 
+def _csv_cell(value: object) -> object:
+    """Prevent spreadsheet applications from evaluating untrusted text as a formula."""
+    if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")):
+        return f"'{value}"
+    return value
+
+
+def _safe_row(values: list[object]) -> list[object]:
+    return [_csv_cell(value) for value in values]
+
+
 def export_events_csv(events: list[FloodEvent]) -> str:
-    """FOIA CSV export - Texas Gov records retention, evidence with provenance"""
+    """Export normalized evidence with provenance for records review."""
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["event_id", "source", "observed_at", "kind", "title", "severity", "location", "latitude", "longitude", "value", "unit", "provenance_url", "mode"])
     for e in events:
         writer.writerow(
-            [
+            _safe_row([
                 e.event_id,
                 e.source,
                 e.observed_at.isoformat(),
@@ -30,7 +42,7 @@ def export_events_csv(events: list[FloodEvent]) -> str:
                 e.unit or "",
                 e.provenance_url,
                 e.mode,
-            ]
+            ])
         )
     return output.getvalue()
 
@@ -41,7 +53,7 @@ def export_decisions_csv(decisions: list[IncidentDecision]) -> str:
     writer.writerow(["incident_id", "created_at", "mode", "scenario_id", "summary", "risk_level", "confidence", "policy_status", "model_name", "evidence_event_ids", "citations", "action_type", "target"])
     for d in decisions:
         writer.writerow(
-            [
+            _safe_row([
                 d.incident_id,
                 d.created_at.isoformat(),
                 d.mode,
@@ -55,76 +67,70 @@ def export_decisions_csv(decisions: list[IncidentDecision]) -> str:
                 ";".join(d.citations),
                 d.proposed_action.action_type,
                 d.proposed_action.target,
-            ]
+            ])
         )
     return output.getvalue()
 
 
 def build_edxl_de(decision: IncidentDecision, events: list[FloodEvent]) -> bytes:
     """
-    Build EDXL Distribution Element (EDXL-DE) 1.0 wrapper for CAP + Texas metadata.
-    Gov-grade: EDXL-DE is used for sharing emergency info between systems, TDEM compatible.
+    Build a draft EDXL Distribution Element (EDXL-DE) 1.0-shaped wrapper.
+    Builds an unvalidated EDXL-DE interoperability export for review.
     """
     # EDXL-DE namespaces
     edxl_ns = "urn:oasis:names:tc:emergency:EDXL:DE:1.0"
-    cap_ns = "urn:oasis:names:tc:emergency:cap:1.2"
-
     distribution = Element("EDXLDistribution", {"xmlns": edxl_ns})
     SubElement(distribution, "distributionID").text = f"austin-floodops-{decision.incident_id}"
-    SubElement(distribution, "senderID").text = "austin-floodops@texas.gov"
+    SubElement(distribution, "senderID").text = "austin-floodops-prototype"
     SubElement(distribution, "dateTimeSent").text = decision.created_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-    SubElement(distribution, "distributionStatus").text = "Actual"
+    SubElement(distribution, "distributionStatus").text = "Test"
     SubElement(distribution, "distributionType").text = "Report"
-    SubElement(distribution, "combinedConfidentiality").text = "Restricted - Texas Data Classification Confidential"
+    SubElement(distribution, "combinedConfidentiality").text = "Unclassified"
     SubElement(distribution, "language").text = "en-US"
 
-    # Explicit address for Texas agencies
+    # Prototype routing address; it is not an agency address or routing scheme.
     target_areas = SubElement(distribution, "explicitAddress")
-    SubElement(target_areas, "explicitAddressScheme").text = "Texas TDEM Regions"
-    SubElement(target_areas, "explicitAddressValue").text = "Travis County, Williamson County, Hays County, Bastrop County - Austin EOC"
+    SubElement(target_areas, "explicitAddressScheme").text = "urn:austin-floodops:prototype:jurisdiction"
+    SubElement(target_areas, "explicitAddressValue").text = "Austin-area emergency-operations exercise"
 
     # Content object wrapping CAP
     content_obj = SubElement(distribution, "contentObject")
-    SubElement(content_obj, "combinedConfidentiality").text = "Restricted"
-    SubElement(content_obj, "contentDescription").text = f"FloodOps incident {decision.risk_level} - {decision.summary} - Great State of Texas"
-    SubElement(content_obj, "contentKeyword").text = "Flood, Texas, TDEM, Austin, LCRA, TxDOT, CAP, EDXL"
+    SubElement(content_obj, "combinedConfidentiality").text = "Unclassified"
+    SubElement(content_obj, "contentDescription").text = f"FloodOps prototype incident {decision.risk_level} - {decision.summary}"
+    SubElement(content_obj, "contentKeyword").text = "Flood, Texas, Austin, CAP, EDXL, Prototype"
     SubElement(content_obj, "incidentID").text = decision.incident_id
     SubElement(content_obj, "incidentDescription").text = decision.summary
 
     # Originator role
-    SubElement(content_obj, "originatorRole").text = "Austin FloodOps Enterprise - Decision Support, Human Authority"
+    SubElement(content_obj, "originatorRole").text = "Austin FloodOps decision-support prototype"
 
-    # Kay? Add consumer role
-    SubElement(content_obj, "consumerRole").text = "TDEM, Travis County EOC, Austin Transportation"
+    SubElement(content_obj, "consumerRole").text = "Authorized prototype reviewer"
 
     # Embedded CAP XML as xmlContent
     xml_content = SubElement(content_obj, "xmlContent")
     embedded = SubElement(xml_content, "embeddedXMLContent")
-    # For simplicity, embed CAP as keyXMLContent reference - real would embed full CAP
+    # This is a review marker, not a standards-conformant embedded CAP document.
     key_xml = SubElement(embedded, "keyXMLContent")
-    SubElement(key_xml, "CAPAlert").text = f"CAP 1.2 Alert for {decision.incident_id} - {decision.risk_level} - See /api/decisions/{decision.incident_id}/cap for full XML"
+    SubElement(key_xml, "CAPAlert").text = f"CAP 1.2 Test alert for {decision.incident_id} - {decision.risk_level}"
 
     # Add non-XML content with provenance
-    non_xml = SubElement(content_obj, "nonXMLContent")
-    mime = SubElement(non_xml, "mimeType").text = "application/json"
-    size = SubElement(non_xml, "size").text = str(len(json.dumps([e.model_dump(mode="json") for e in events])))
-    digest = SubElement(non_xml, "digest").text = f"SHA256 of {len(events)} evidence items with provenance"
-    uri = SubElement(non_xml, "uri").text = f"https://austin-floodops.texas.gov/api/decisions/{decision.incident_id}/cap"
-    content_data = SubElement(non_xml, "contentData").text = json.dumps(
+    evidence_json = json.dumps(
         {
             "incident_id": decision.incident_id,
             "evidence": [{"event_id": e.event_id, "source": e.source, "provenance_url": e.provenance_url} for e in events],
-            "texas_metadata": {
+            "metadata": {
                 "state": "Texas",
-                "great_state": "The Great State of Texas - Lone Star State",
-                "tdem_ready": True,
-                "lcra": "Lower Colorado River Authority Hydromet",
-                "txdot": "TxDOT DriveTexas closures",
-                "austin_eoc": "Austin Emergency Operations Center",
-                "foia_retention_years": 7,
-                "classification": "Texas Data Classification: Confidential - Emergency Operations",
+                "prototype": True,
+                "agency_authorized": False,
+                "standards_validated": False,
             },
-        }
+        },
+        sort_keys=True,
     )
+    non_xml = SubElement(content_obj, "nonXMLContent")
+    SubElement(non_xml, "mimeType").text = "application/json"
+    SubElement(non_xml, "size").text = str(len(evidence_json.encode("utf-8")))
+    SubElement(non_xml, "digest").text = f"sha256:{hashlib.sha256(evidence_json.encode('utf-8')).hexdigest()}"
+    SubElement(non_xml, "contentData").text = evidence_json
 
     return tostring(distribution, encoding="utf-8", xml_declaration=True)

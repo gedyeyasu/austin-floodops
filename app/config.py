@@ -46,7 +46,9 @@ class Settings:
     hiddenlayer_hl_project_id: str = os.getenv("HIDDENLAYER_HL_PROJECT_ID", "default-project")
     first_responder_webhook_url: str = os.getenv("FIRST_RESPONDER_WEBHOOK_URL", "")
     first_responder_webhook_token: str = os.getenv("FIRST_RESPONDER_WEBHOOK_TOKEN", "")
-    webeoc_api_url: str = os.getenv("WEBEOC_API_URL", "https://webeoc.tdem.texas.gov/tdem/api.asmx")
+    # WebEOC endpoints and board contracts are organization-specific. Keep this
+    # empty until an authorized sandbox owner supplies the complete contract.
+    webeoc_api_url: str = os.getenv("WEBEOC_API_URL", "")
     webeoc_username: str = os.getenv("WEBEOC_USERNAME", "")
     webeoc_password: str = os.getenv("WEBEOC_PASSWORD", "")
     webeoc_position: str = os.getenv("WEBEOC_POSITION", "")
@@ -60,6 +62,7 @@ class Settings:
     vllm_model: str = os.getenv("VLLM_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct")
     vllm_api_key: str = os.getenv("VLLM_API_KEY", "")
     jwt_secret: str = os.getenv("JWT_SECRET", "dev-only-change-me-austin-floodops-jwt-secret")
+    auth_bootstrap_token: str = os.getenv("AUTH_BOOTSTRAP_TOKEN", "")
     enable_rbac: bool = os.getenv("ENABLE_RBAC", "false").lower() in {"1", "true", "yes", "on"}
     osrm_base_url: str = os.getenv("OSRM_BASE_URL", "https://router.project-osrm.org").rstrip("/")
     enable_prediction: bool = os.getenv("ENABLE_PREDICTION", "true").lower() in {"1", "true", "yes", "on"}
@@ -95,6 +98,19 @@ class Settings:
     @property
     def has_first_responder(self) -> bool:
         return bool(self.first_responder_webhook_url and self.first_responder_webhook_token)
+
+    @property
+    def has_secure_auth(self) -> bool:
+        insecure_secrets = {
+            "",
+            "dev-only-change-me-austin-floodops-jwt-secret",
+            "replace-with-a-long-random-secret",
+        }
+        return (
+            self.jwt_secret not in insecure_secrets
+            and len(self.jwt_secret) >= 32
+            and len(self.auth_bootstrap_token) >= 32
+        )
 
     @property
     def has_webeoc(self) -> bool:

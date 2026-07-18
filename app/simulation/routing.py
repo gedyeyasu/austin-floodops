@@ -53,7 +53,7 @@ async def _osrm_route(
     url = f"{base_url.rstrip('/')}/route/v1/driving/{origin.lon},{origin.lat};{dest.lon},{dest.lat}"
     params = {"overview": "full", "geometries": "geojson", "steps": "true"}
     try:
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
             resp = await client.get(url, params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -110,8 +110,8 @@ async def compute_evacuation_routes(
     # Default safe destinations: Austin high ground
     if safe_destinations is None:
         safe_destinations = [
-            RoutePoint(lon=-97.7431, lat=30.2672, name="Austin Convention Center high ground"),
-            RoutePoint(lon=-97.75, lat=30.32, name="North Austin shelter"),
+            RoutePoint(lon=-97.7431, lat=30.2672, name="Exercise destination A"),
+            RoutePoint(lon=-97.75, lat=30.32, name="Exercise destination B"),
         ]
     if origins is None:
         # Derive origins from blocked crossings if provided, else generic

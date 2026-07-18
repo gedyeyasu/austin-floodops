@@ -67,6 +67,16 @@ class HeartbeatEngine:
                 _, decision, assessment_error = await self.service.assess_events(new_events, self.scenario_id)
                 if assessment_error:
                     error = "; ".join(item for item in (error, assessment_error) if item)
+            if decision:
+                stream = decision.raw_model_response.get("security", {}).get("kafka", {})
+            elif self.service.settings.has_kafka and previous.get("stream", {}).get("status") == "verified":
+                # A quiet poll does not invalidate the most recent proven broker
+                # round trip. Preserve the evidence and label this cycle idle.
+                stream = {**previous["stream"], "current_cycle": "idle", "current_cycle_records": 0}
+            else:
+                stream = {"status": "idle" if self.service.settings.has_kafka else "not_configured", "current_cycle_records": 0}
+            if stream.get("status") == "degraded":
+                error = "; ".join(item for item in (error, f"Stream degraded: {stream.get('detail', 'round-trip incomplete')}") if item)
             state.update(
                 {
                     "last_completed_at": _now(),
@@ -78,6 +88,7 @@ class HeartbeatEngine:
                     "new_events": len(new_events),
                     "decision_outcome": decision.policy_status if decision else "no_new_events",
                     "last_decision_id": decision.incident_id if decision else previous.get("last_decision_id"),
+                    "stream": stream,
                 }
             )
             logger.info(

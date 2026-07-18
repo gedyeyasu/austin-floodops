@@ -19,7 +19,7 @@ def _compute_hash(prev_hash: str, payload: str, timestamp: str) -> str:
 
 
 class AuditChain:
-    """Tamper-evident hash chain for gov-grade audit."""
+    """Tamper-evident application hash chain for prototype audit review."""
 
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)

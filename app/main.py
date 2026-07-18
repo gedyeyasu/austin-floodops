@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.evaluation.runner import EvaluationRunner
-from app.models import FirstResponderDispatchRequest, HealthResponse, IncidentRequest, OperatorFeedback, SimulationRequest
+from app.models import FloodEvent, FirstResponderDispatchRequest, HealthResponse, IncidentRequest, OperatorFeedback, SimulationRequest, utc_now
 from app.responders.cap import ResponderUnavailable, build_cap_alert, send_cap
-from app.responders.webeoc import WebEOCConfig, WebEOCUnavailable, send_to_webeoc
+from app.responders.webeoc import WebEOCConfig, WebEOCUnavailable, send_to_webeoc, add_data_envelope
 from app.security.hiddenlayer import HiddenLayerUnavailable, scan_interaction
 from app.service import FloodOpsService
 from app.storage.supabase import SupabaseUnavailable
@@ -46,7 +48,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Austin FloodOps",
     version="0.3.0",
-    description="Enterprise Gov-Grade flood operations coordination - approval-gated, audit-chained, RBAC, vLLM fallback, prediction, routing",
+    description="Approval-gated flood decision-support prototype using live public evidence, Nemotron, and optional Kafka-compatible streaming",
     lifespan=lifespan,
 )
 
@@ -67,23 +69,37 @@ async def dashboard() -> FileResponse:
 async def health() -> HealthResponse:
     heartbeat = service.store.heartbeat_state()
     sources = heartbeat.get("sources", {})
+    stream = heartbeat.get("stream", {})
+    latest_decisions = service.store.list_decisions(limit=1)
+    latest_security = latest_decisions[0].raw_model_response.get("security", {}) if latest_decisions else {}
+    latest_decision_stream = latest_security.get("kafka", {})
+    kafka_probe_state = heartbeat.get("integration_kafka", {})
+    supabase_probe_state = heartbeat.get("integration_supabase", {})
+    osrm_probe_state = heartbeat.get("integration_osrm", {})
+    latest_hiddenlayer = latest_security.get("hiddenlayer", {})
+    hiddenlayer_complete = set(latest_hiddenlayer.get("boundaries_scanned", [])) == {
+        "ingested_content", "user_prompt_memory", "model_request", "tool_call", "tool_result", "final_answer"
+    }
+    audit_state = service.audit_chain.verify_chain() if service.audit_chain else {"verified": False, "total_entries": 0}
     integrations = [
         {"name": "Autonomous heartbeat", "configured": settings.heartbeat_enabled, "verified": bool(heartbeat.get("last_success_at")), "detail": f"{settings.poll_seconds}s NWS + USGS + Austin polling"},
         {"name": "NWS alerts", "configured": True, "verified": sources.get("nws", {}).get("status") == "ok", "detail": "Official weather.gov active-alerts endpoint"},
         {"name": "USGS water services", "configured": True, "verified": sources.get("usgs", {}).get("status") == "ok", "detail": f"Instantaneous values for site {settings.usgs_site_id}"},
-        {"name": "NVIDIA Nemotron", "configured": settings.has_nvidia_key, "verified": False, "detail": settings.nvidia_base_url},
-        {"name": "vLLM open-weight fallback", "configured": settings.has_vllm, "verified": False, "detail": f"{settings.vllm_base_url} model {settings.vllm_model}"},
-        {"name": "Red Hat Streams/Kafka", "configured": settings.has_kafka, "verified": False, "detail": "Event IDs are preserved for retry"},
-        {"name": "Supabase", "configured": settings.has_supabase, "verified": False, "detail": "SQLite remains the durable local queue"},
+        {"name": "NVIDIA Nemotron", "configured": settings.has_nvidia_key, "verified": bool(latest_decisions and latest_decisions[0].model_name == settings.nemotron_model), "detail": settings.nvidia_base_url},
+        {"name": "vLLM open-weight fallback", "configured": settings.has_vllm, "verified": bool(latest_decisions and latest_decisions[0].model_name == settings.vllm_model), "detail": f"{settings.vllm_base_url} model {settings.vllm_model}"},
+        {"name": "Kafka-compatible stream", "configured": settings.has_kafka, "verified": any(item.get("status") == "verified" for item in (stream, latest_decision_stream, kafka_probe_state)), "detail": f"publish → consume → assess; assessment {latest_decision_stream.get('status', 'not run')}, heartbeat {stream.get('status', 'not run')}, probe {kafka_probe_state.get('status', 'not run')}"},
+        {"name": "Supabase", "configured": settings.has_supabase, "verified": supabase_probe_state.get("status") == "verified", "detail": f"Latest REST probe: {supabase_probe_state.get('status', 'not run')}; SQLite remains the durable local queue"},
         {"name": "NemoClaw/OpenShell", "configured": settings.has_openshell, "verified": False, "detail": "Approval and reversible-action boundary"},
-        {"name": "HiddenLayer runtime", "configured": settings.has_hiddenlayer, "verified": False, "detail": "Unsafe or unavailable scans fail closed"},
+        {"name": "HiddenLayer runtime", "configured": settings.has_hiddenlayer_v2, "verified": hiddenlayer_complete and latest_hiddenlayer.get("status") in {"verified", "scanned_with_findings"}, "detail": "Three input scans before inference and three output scans afterward; any missing configured scan blocks the decision"},
         {"name": "First-responder CAP webhook", "configured": settings.has_first_responder, "verified": False, "detail": "Approval-gated CAP 1.2 sender"},
-        {"name": "Texas TDEM WebEOC", "configured": settings.has_webeoc, "verified": False, "detail": "Approval-gated AddData adapter"},
-        {"name": "Austin low-water crossings", "configured": True, "verified": sources.get("austin_crossings", {}).get("status") == "ok", "detail": "data.austintexas.gov q3y8-2xnm.json"},
+        {"name": "WebEOC interoperability adapter", "configured": settings.has_webeoc, "verified": False, "detail": "No agency connection is implied; delivery requires organization-issued settings and approval"},
+        {"name": "Austin low-water crossing reference", "configured": True, "verified": sources.get("austin_crossings", {}).get("status") == "ok", "detail": "data.austintexas.gov q6kt-v2zm.json; reference inventory, not closure status"},
         {"name": "Austin road closures", "configured": True, "verified": sources.get("austin_roads", {}).get("status") == "ok", "detail": "data.austintexas.gov fw5i-n4te.json"},
-        {"name": "Austin floodplain GeoJSON", "configured": True, "verified": True, "detail": "data.austintexas.gov 3p2e-ps67.json with synthetic fallback"},
-        {"name": "OSRM routing", "configured": settings.has_osrm, "verified": False, "detail": f"{settings.osrm_base_url} detour service"},
-        {"name": "RBAC / JWT + Audit Chain + Prediction", "configured": settings.enable_rbac or settings.enable_audit_chain or settings.enable_prediction, "verified": bool(service.audit_chain), "detail": f"RBAC={settings.enable_rbac} audit={settings.enable_audit_chain} prediction={settings.enable_prediction}"},
+        {"name": "Austin floodplain GeoJSON", "configured": True, "verified": False, "detail": "data.austintexas.gov 3p2e-ps67.json; no synthetic geometry"},
+        {"name": "OSRM routing", "configured": settings.has_osrm, "verified": osrm_probe_state.get("status") == "verified", "detail": f"{settings.osrm_base_url} detour service; probe {osrm_probe_state.get('status', 'not run')}"},
+        {"name": "Role-based access control", "configured": settings.enable_rbac and settings.has_secure_auth, "verified": False, "detail": "Disabled by default; enabling it requires independent JWT and bootstrap secrets of at least 32 characters"},
+        {"name": "Application audit chain", "configured": settings.enable_audit_chain, "verified": bool(audit_state["verified"] and audit_state["total_entries"]), "detail": f"{audit_state['total_entries']} local entries; not an external compliance certification"},
+        {"name": "Heuristic prediction", "configured": settings.enable_prediction, "verified": False, "detail": "Linear gage projection; run /api/predict and review assumptions"},
     ]
     status = "ok" if (settings.has_nvidia_key or settings.has_vllm) else "degraded"
     return HealthResponse(status=status, mode=settings.data_mode, integrations=integrations)  # type: ignore[arg-type]
@@ -98,16 +114,26 @@ async def heartbeat_status() -> dict:
 
 class TokenRequest(BaseModel):
     sub: str = Field(default="operator", description="subject / username")
-    role: str = Field(default="operator", description="viewer, operator, supervisor, admin, auditor, system")
+    role: str = Field(default="operator", description="viewer, operator, supervisor, admin, or auditor")
     expires_minutes: int = Field(default=480, ge=1, le=10080)
 
 
 @app.post("/api/auth/token")
-async def auth_token(req: TokenRequest) -> dict:
+async def auth_token(
+    req: TokenRequest,
+    bootstrap_token: str | None = Header(default=None, alias="X-FloodOps-Bootstrap-Token"),
+) -> dict:
     try:
         role = Role(req.role)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid role {req.role}, must be one of {[r.value for r in Role]}")
+    if role is Role.system:
+        raise HTTPException(status_code=403, detail="The internal system role cannot be issued through the token endpoint.")
+    if settings.enable_rbac:
+        if not settings.has_secure_auth:
+            raise HTTPException(status_code=503, detail="Secure JWT and bootstrap secrets are required when role-based access control is enabled.")
+        if not bootstrap_token or not secrets.compare_digest(bootstrap_token, settings.auth_bootstrap_token):
+            raise HTTPException(status_code=401, detail="A valid X-FloodOps-Bootstrap-Token header is required.")
     token = create_token(sub=req.sub, role=role, expires_minutes=req.expires_minutes)
     return {"access_token": token, "token_type": "bearer", "role": role.value, "sub": req.sub, "expires_minutes": req.expires_minutes}
 
@@ -194,23 +220,50 @@ async def kafka_probe(actor: Actor = Depends(require_role(Role.admin, Role.syste
     if not settings.has_kafka:
         return {"status": "unconfigured", "detail": "Set KAFKA_BOOTSTRAP_SERVERS before running the producer/consumer probe."}
     try:
-        stored = service.store.list_events(limit=1)
-        published = service.event_bus().publish(stored) if stored else 0
-        consumed = list(service.event_bus().consume(max_records=max(1, published))) if published else []
-        return {"status": "verified", "published": published, "consumed": len(consumed), "event_ids": [item.event_id for item in consumed]}
+        probe_id = f"kafka-probe-{uuid.uuid4().hex}"
+        probe_event = FloodEvent(
+            event_id=probe_id,
+            source="replay",
+            observed_at=utc_now(),
+            kind="integration_probe",
+            title="Kafka-compatible stream round-trip probe",
+            provenance_url="https://austin-floodops.example.invalid/integration-probe",
+            mode="replay",
+        )
+        probe_bus = service.event_bus(group_id="austin-floodops-probe", topic=f"{settings.kafka_topic}.probe")
+        published = probe_bus.publish([probe_event])
+        consumed = list(probe_bus.consume(max_records=100))
+        expected_ids = {probe_id}
+        matched_by_id = {item.event_id: item for item in consumed if item.event_id in expected_ids}
+        status = "verified" if published == 1 and set(matched_by_id) == expected_ids else "degraded"
+        result = {
+            "status": status,
+            "published": published,
+            "consumed": len(matched_by_id),
+            "event_ids": sorted(matched_by_id),
+            "detail": "Producer and consumer observed the same event IDs." if status == "verified" else "Published event IDs were not all consumed before timeout.",
+        }
+        service.store.save_heartbeat_state({"integration_kafka": result})
+        return result
     except KafkaUnavailable as exc:
-        return {"status": "blocked", "detail": str(exc)}
+        result = {"status": "blocked", "detail": str(exc)}
+        service.store.save_heartbeat_state({"integration_kafka": result})
+        return result
 
 
 @app.post("/api/integrations/hiddenlayer/probe")
 async def hiddenlayer_probe(actor: Actor = Depends(require_role(Role.admin, Role.system))) -> dict:
-    if not settings.has_hiddenlayer:
-        return {"status": "unconfigured", "detail": "Set HIDDENLAYER_INTERACTIONS_URL and HIDDENLAYER_API_KEY."}
+    if not settings.has_hiddenlayer_v2:
+        return {"status": "unconfigured", "detail": "Set HIDDENLAYER_CLIENT_ID and HIDDENLAYER_CLIENT_SECRET."}
     try:
         result = await scan_interaction(service.hiddenlayer(), input_text="Austin FloodOps integration probe", output_text="allow")
-        return {"status": "verified", "result": result}
+        response = {"status": "verified", "result": result}
+        service.store.save_heartbeat_state({"integration_hiddenlayer": response})
+        return response
     except HiddenLayerUnavailable as exc:
-        return {"status": "blocked", "detail": str(exc)}
+        response = {"status": "blocked", "detail": str(exc)}
+        service.store.save_heartbeat_state({"integration_hiddenlayer": response})
+        return response
 
 
 @app.post("/api/integrations/supabase/probe")
@@ -218,9 +271,11 @@ async def supabase_probe(actor: Actor = Depends(require_role(Role.admin, Role.sy
     if not settings.has_supabase:
         return {"status": "unconfigured", "detail": "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."}
     try:
-        return await service.supabase().probe()
+        result = await service.supabase().probe()
     except SupabaseUnavailable as exc:
-        return {"status": "blocked", "detail": str(exc)}
+        result = {"status": "blocked", "detail": str(exc)}
+    service.store.save_heartbeat_state({"integration_supabase": result})
+    return result
 
 
 @app.post("/api/integrations/vllm/probe")
@@ -228,6 +283,7 @@ async def vllm_probe(actor: Actor = Depends(require_role(Role.admin, Role.system
     from app.model.vllm import probe_vllm
 
     result = await probe_vllm(settings.vllm_base_url, settings.vllm_model, settings.vllm_api_key)
+    service.store.save_heartbeat_state({"integration_vllm": result})
     return result
 
 
@@ -239,13 +295,18 @@ async def osrm_probe(actor: Actor = Depends(require_role(Role.admin, Role.system
     dest = RoutePoint(lon=-97.75, lat=30.32, name="North Austin")
     try:
         if not settings.has_osrm:
-            return {"status": "unconfigured", "detail": "Set OSRM_BASE_URL", "base_url": settings.osrm_base_url}
-        data = await _osrm_route(origin, dest, base_url=settings.osrm_base_url)
-        if data:
-            return {"status": "verified", "base_url": settings.osrm_base_url, "distance_m": data.get("distance"), "duration_s": data.get("duration")}
-        return {"status": "degraded", "base_url": settings.osrm_base_url, "detail": "OSRM returned no routes"}
+            result = {"status": "unconfigured", "detail": "Set OSRM_BASE_URL", "base_url": settings.osrm_base_url}
+        else:
+            data = await _osrm_route(origin, dest, base_url=settings.osrm_base_url)
+            result = (
+                {"status": "verified", "base_url": settings.osrm_base_url, "distance_m": data.get("distance"), "duration_s": data.get("duration")}
+                if data
+                else {"status": "degraded", "base_url": settings.osrm_base_url, "detail": "OSRM returned no routes"}
+            )
     except Exception as exc:
-        return {"status": "blocked", "detail": str(exc), "base_url": settings.osrm_base_url}
+        result = {"status": "blocked", "detail": str(exc), "base_url": settings.osrm_base_url}
+    service.store.save_heartbeat_state({"integration_osrm": result})
+    return result
 
 
 @app.post("/api/decisions/{incident_id}/approve")
@@ -273,12 +334,16 @@ async def first_responder(incident_id: str, payload: FirstResponderDispatchReque
     if decision.policy_status != "allowed":
         return {"status": "blocked", "detail": "Approve the reversible action before sending a responder message."}
     channel = "first-responder-cap"
-    if service.store.delivery_exists(incident_id, channel):
+    if not service.store.claim_delivery(incident_id, channel):
         return {"status": "already_delivered", "incident_id": incident_id}
     try:
         status = await send_cap(url=settings.first_responder_webhook_url, token=settings.first_responder_webhook_token, incident_id=incident_id, payload=build_cap_alert(decision))
     except ResponderUnavailable as exc:
+        service.store.release_delivery_claim(incident_id, channel)
         return {"status": "blocked", "detail": str(exc)}
+    except Exception:
+        service.store.release_delivery_claim(incident_id, channel)
+        raise
     service.record_delivery(incident_id, channel, status, actor_id=actor.sub, actor_role=actor.role.value)
     return {"status": "delivered", "incident_id": incident_id, "response_status": status}
 
@@ -290,8 +355,10 @@ async def webeoc(incident_id: str, payload: FirstResponderDispatchRequest, actor
         return {"status": "blocked", "detail": "Set confirm=true after reviewing the CAP payload."}
     if decision.policy_status != "allowed":
         return {"status": "blocked", "detail": "Approve the reversible action before sending to WebEOC."}
+    # Keep the historical channel key so existing delivery rows continue to
+    # prevent duplicate handoffs after upgrades.
     channel = "tdem-webeoc"
-    if service.store.delivery_exists(incident_id, channel):
+    if not service.store.claim_delivery(incident_id, channel):
         return {"status": "already_delivered", "incident_id": incident_id}
     config = WebEOCConfig(
         api_url=settings.webeoc_api_url,
@@ -305,8 +372,12 @@ async def webeoc(incident_id: str, payload: FirstResponderDispatchRequest, actor
     try:
         result = await send_to_webeoc(config, incident_id=incident_id, cap_payload=build_cap_alert(decision))
     except WebEOCUnavailable as exc:
+        service.store.release_delivery_claim(incident_id, channel)
         return {"status": "blocked", "detail": str(exc)}
-    service.store.record_delivery(incident_id, channel, result, actor_id=actor.sub, actor_role=actor.role.value)
+    except Exception:
+        service.store.release_delivery_claim(incident_id, channel)
+        raise
+    service.record_delivery(incident_id, channel, result, actor_id=actor.sub, actor_role=actor.role.value)
     return {"status": "delivered", "incident_id": incident_id, "webeoc_result": result}
 
 
@@ -324,8 +395,8 @@ async def feedback(incident_id: str, payload: OperatorFeedback, actor: Actor = D
 # --- New Enterprise Endpoints ---
 
 class PredictRequest(BaseModel):
-    mode: str = Field(default="live", description="live or replay")
-    scenario_id: str = Field(default="austin-live-predict", description="scenario id")
+    mode: Literal["live", "replay"] = Field(default="live", description="live or replay")
+    scenario_id: str = Field(default="austin-live-predict", pattern=r"^[a-z0-9][a-z0-9-]{0,63}$", description="scenario id")
     incident_id: Optional[str] = Field(default=None, description="Incident to base prediction on, or None for latest")
     horizons_minutes: list[int] = Field(default=[15, 30, 60, 120, 180])
     site_id: Optional[str] = None
@@ -405,7 +476,6 @@ class RoutingRequest(BaseModel):
     blocked_crossings: list[dict[str, Any]] = Field(default_factory=list, description="List of {location, latitude, longitude, name}")
     origins: list[dict[str, Any]] | None = Field(default=None, description="Optional origins [{lon, lat, name}]")
     destinations: list[dict[str, Any]] | None = Field(default=None, description="Optional destinations [{lon, lat, name}]")
-    osrm_base_url: str | None = None
 
 
 @app.post("/api/routing/detour")
@@ -418,7 +488,11 @@ async def routing_detour(req: RoutingRequest, actor: Actor = Depends(require_act
         points: list[RoutePoint] = []
         for item in lst:
             try:
-                points.append(RoutePoint(lon=float(item["lon"] if "lon" in item else item["longitude"]), lat=float(item["lat"] if "lat" in item else item["latitude"]), name=item.get("name")))
+                lon = float(item["lon"] if "lon" in item else item["longitude"])
+                lat = float(item["lat"] if "lat" in item else item["latitude"])
+                if not (-180 <= lon <= 180 and -90 <= lat <= 90):
+                    continue
+                points.append(RoutePoint(lon=lon, lat=lat, name=item.get("name")))
             except Exception:
                 continue
         return points if points else None
@@ -426,7 +500,7 @@ async def routing_detour(req: RoutingRequest, actor: Actor = Depends(require_act
     origins = to_route_points(req.origins)
     dests = to_route_points(req.destinations)
 
-    routes = await compute_evacuation_routes(req.blocked_crossings, origins=origins, safe_destinations=dests, osrm_base_url=req.osrm_base_url or settings.osrm_base_url)
+    routes = await compute_evacuation_routes(req.blocked_crossings, origins=origins, safe_destinations=dests, osrm_base_url=settings.osrm_base_url)
 
     return {
         "status": "routed",
@@ -497,7 +571,7 @@ async def after_action(incident_id: str, actor: Actor = Depends(require_action("
     return report
 
 
-# --- Texas Resource Management ---
+# --- Local exercise resource inventory ---
 class ResourceCreateRequest(BaseModel):
     id: str = Field(..., description="Unique resource ID e.g. barricade-001")
     type: str = Field(..., description="barricade, high_water_vehicle, shelter, personnel, gate, pump")
@@ -559,7 +633,7 @@ async def list_assignments(incident_id: str, actor: Actor = Depends(require_acti
     return service.store.list_assignments(incident_id=incident_id)
 
 
-# --- Texas FOIA Exports ---
+# --- Records-review and interoperability exports ---
 @app.get("/api/export/events.csv")
 async def export_events_csv(limit: int = 500, actor: Actor = Depends(require_action("audit_read"))) -> Response:
     from app.responders.foia import export_events_csv
@@ -600,13 +674,13 @@ async def export_foia_bundle(incident_id: str, actor: Actor = Depends(require_ac
 
     return {
         "incident_id": incident_id,
-        "texas_banner": "Built for the Great State of Texas - The Lone Star State - TDEM Ready",
+        "texas_banner": "Austin FloodOps Texas interoperability prototype",
         "cap_xml": build_cap_alert(decision).decode("utf-8"),
         "edxl_de_xml": build_edxl_de(decision, events).decode("utf-8"),
         "events_csv": export_events_csv(events),
         "after_action_json": report,
         "audit_verification": service.audit_chain.verify_chain(incident_id) if service.audit_chain else {"valid": False},
-        "foia_note": "Texas Public Information Act - 7yr retention, Confidential - Emergency Operations, FOIA exportable",
+        "records_note": "Prototype records-review bundle. No release, classification, or retention determination has been made.",
     }
 
 
@@ -626,6 +700,145 @@ async def pwa_offline() -> FileResponse:
     return FileResponse(Path(__file__).parent / "static" / "offline.html", media_type="text/html")
 
 
+@app.get("/api/decisions/{incident_id}/webeoc/preview")
+async def webeoc_preview(incident_id: str, actor: Actor = Depends(require_action("view"))) -> dict:
+    """
+    Build a side-effect-free WebEOC interoperability preview.
+
+    Delivery is a separate endpoint and remains blocked without organization-issued
+    configuration, policy approval, and explicit operator confirmation.
+    """
+    decision = _decision(incident_id)
+    cap_xml = build_cap_alert(decision)
+    cap_str = cap_xml.decode("utf-8")
+
+    # Build a side-effect-free preview with reserved, non-routable placeholder values.
+    preview_config = WebEOCConfig(
+        api_url=settings.webeoc_api_url or "https://webeoc.example.invalid/api",
+        username=settings.webeoc_username or "PROTOTYPE_USER",
+        password="***REDACTED***" if settings.webeoc_password else "PROTOTYPE_PASSWORD",
+        position=settings.webeoc_position or "Prototype Operations Position",
+        incident=settings.webeoc_incident or f"Incident-{incident_id[:8]}",
+        board_name=settings.webeoc_board_name or "Prototype FloodOps Board",
+        input_view_name=settings.webeoc_input_view_name or "Prototype Input View",
+    )
+    # Build SOAP envelope preview (with redacted password)
+    try:
+        soap_bytes = add_data_envelope(preview_config, cap_xml)
+        soap_str = soap_bytes.decode("utf-8")
+    except Exception as exc:
+        soap_str = f"Failed to build SOAP envelope: {exc}"
+
+    # Advisory review guidance. The deterministic policy remains authoritative.
+    should_approve = False
+    approval_reason = ""
+    citation_validation = decision.raw_model_response.get("austin_floodops", {}).get("citation_validation", {})
+    model_citations_valid = citation_validation.get("status") in {"model_citations_valid", "model_text_references_grounded"}
+    citations_complete = model_citations_valid and len(decision.citations) >= 3
+    if decision.policy_status == "blocked":
+        approval_reason = "Policy is blocked; do not approve or deliver."
+    elif decision.policy_status == "allowed":
+        approval_reason = "The reversible action is already approved; review the separate delivery confirmation."
+    elif decision.risk_level in {"high", "catastrophic"}:
+        if decision.confidence >= 0.7 and citations_complete:
+            should_approve = True
+            approval_reason = f"Review supports approval consideration: {decision.risk_level} risk, {decision.confidence:.0%} confidence, and {len(decision.citations)} grounded citations."
+        else:
+            citation_detail = "model-supplied citations are valid" if model_citations_valid else "citations were repaired or incomplete and require manual evidence review"
+            approval_reason = f"Review evidence before approval: confidence is {decision.confidence:.0%}; {citation_detail}; grounded citation count is {len(decision.citations)}."
+    elif decision.risk_level == "moderate":
+        should_approve = decision.confidence >= 0.8 and citations_complete
+        approval_reason = f"Moderate risk review: confidence {decision.confidence:.0%}; grounded citations {len(decision.citations)}."
+    else:
+        should_approve = False
+        approval_reason = f"Risk {decision.risk_level} low/unknown - monitor, no need to send to WebEOC yet"
+
+    # Check if already delivered
+    already_delivered_webeoc = service.store.delivery_exists(incident_id, "tdem-webeoc")
+    already_delivered_cap = service.store.delivery_exists(incident_id, "first-responder-cap")
+
+    return {
+        "incident_id": incident_id,
+        "texas_banner": "Austin FloodOps interoperability prototype - not agency authorized",
+        "current_status": {
+            "risk_level": decision.risk_level,
+            "confidence": decision.confidence,
+            "policy_status": decision.policy_status,
+            "policy_reason": decision.raw_model_response.get("security", {}).get("policy", {}).get("reason", "No policy trace"),
+            "evidence_count": len(decision.evidence_event_ids),
+            "citations_count": len(decision.citations),
+            "model_citations_valid": model_citations_valid,
+            "should_approve": should_approve,
+            "approval_reason": approval_reason,
+            "approved": decision.policy_status == "allowed",
+            "already_delivered_webeoc": already_delivered_webeoc,
+            "already_delivered_cap": already_delivered_cap,
+        },
+        "cap_xml": cap_str,
+        "cap_explanation": {
+            "standard": "CAP 1.2 - Common Alerting Protocol v1.2 - OASIS standard urn:oasis:names:tc:emergency:cap:1.2",
+            "fields": {
+                "identifier": f"austin-floodops-{decision.incident_id} - unique id",
+                "sender": "austin-floodops-prototype - unregistered prototype sender",
+                "sent": "UTC timestamp when decision created",
+                "status": "Test - prototype message, not an official public warning",
+                "msgType": "Alert - initial alert",
+                "scope": "Restricted - only for responders, not public",
+                "info": {
+                    "category": "Safety",
+                    "event": "Flood",
+                    "urgency": "Immediate if high/catastrophic else Expected",
+                    "severity": "Extreme if catastrophic, Severe if high, Moderate otherwise",
+                    "certainty": "Likely",
+                    "headline": f"Austin FloodOps: {decision.risk_level} flood operations recommendation",
+                    "description": "One-sentence summary from Nemotron",
+                    "instruction": "Rationale why action follows from cited evidence",
+                    "areaDesc": "Proposed action target - named crossing or site",
+                },
+            },
+            "example_use": "Reviewed locally and optionally sent as a Test message through an authorized sandbox adapter",
+        },
+        "soap_envelope": soap_str,
+        "soap_explanation": {
+            "standard": "SOAP 1.1 AddData envelope preview. Endpoint and board contract require agency validation.",
+            "flow": [
+                "1. Operator injects scenario or heartbeat gathers NWS + USGS + Austin + LCRA + TxDOT + 311 live feeds every 30s",
+                "2. Nemotron produces typed decision with risk_level, confidence, citations, proposed_action reversible-only",
+                "3. Policy engine returns approval_required if high/catastrophic or moderate with low confidence, blocked if quarantine, allowed if approved",
+                "4. Operator reviews center panel: risk badge, confidence %, 3 citations, proposed action, impact metrics depth/exposure/delay, map markers, must approve reversible action button",
+                "5. POST /api/decisions/{id}/approve sets policy_status allowed, audit approved with actor_id/role hash chain SHA256, state chip successful-approval green",
+                "6. Now operator can handoff to downstream: checkbox confirm=true after reviewing CAP payload + button Send to WebEOC",
+                "7. Backend checks confirm=true AND policy_status==allowed AND not already_delivered (idempotency) AND WebEOC config valid",
+                "8. Builds CAP 1.2 XML via build_cap_alert(decision) - side-effect free local",
+                "9. Wraps CAP XML in SOAP AddData envelope: Envelope Body AddData credentials Username Password Position Incident BoardName InputViewName XmlData=cap_xml, headers Content-Type text/xml SOAPAction AddData Idempotency-Key austin-floodops:{incident_id}",
+                "10. Only after agency authorization: POST to the configured WebEOC endpoint, parse AddDataResult, and record the idempotent delivery",
+                "11. Until an agency validates the endpoint, board schema, position, and credentials, Austin FloodOps provides preview/export only",
+            ],
+            "envelope_fields": {
+                "Username": "Organization-issued WebEOC username from WEBEOC_USERNAME",
+                "Password": "*** redacted for security ***",
+                "Position": "Incident Command System position supplied by the organization",
+                "Incident": "Current incident name/number from WEBEOC_INCIDENT",
+                "BoardName": "WebEOC board from WEBEOC_BOARD_NAME, e.g., Austin FloodOps Board",
+                "InputViewName": "Input view from WEBEOC_INPUT_VIEW_NAME",
+                "XmlData": "Full CAP 1.2 XML as text inside SOAP, contains identifier, sender, sent, status, msgType, scope, info category event urgency severity certainty headline description instruction areaDesc target",
+            },
+            "headers": {
+                "Content-Type": "text/xml; charset=utf-8",
+                "SOAPAction": '"urn:com:esi911:webeoc7:api:1.0/AddData"',
+                "Idempotency-Key": f"austin-floodops:{incident_id} - prevents duplicate delivery",
+            },
+        },
+        "demo_note": "PREVIEW ONLY: no Texas agency connection or authorization is claimed. The adapter blocks delivery without complete agency-provided configuration.",
+        "production_note": "Authorized deployment requires an agency-approved endpoint, credentials, position, incident, board, input-view schema, and acceptance testing. Approval and explicit confirm=true remain mandatory.",
+        "should_approve_guidance": {
+            "approve_if": "Policy is approval_required + action is reversible + risk is high/catastrophic + confidence >=70% + at least three valid, unique citations supplied by the model",
+            "reject_if": "Risk low/unknown + confidence <50% + model_error + blocked-action + quarantined-payload + stale-source with consecutive_failures>3",
+            "current_evaluation": approval_reason,
+        },
+    }
+
+
 # Mount static dir for all other assets (leaflet, etc) - must be after specific routes
 try:
     from fastapi.staticfiles import StaticFiles
@@ -633,4 +846,3 @@ try:
     app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 except Exception:
     pass
-

@@ -1,47 +1,51 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+import json
 from typing import Any
 
 import httpx
 
 from app.models import FloodEvent
 
-AUSTIN_CROSSINGS_URL = "https://data.austintexas.gov/resource/q3y8-2xnm.json"
-AUSTIN_ROAD_CLOSURES_URL = "https://data.austintexas.gov/resource/fw5i-n4te.json"  # may vary; fallback handled
+AUSTIN_CROSSINGS_URL = "https://data.austintexas.gov/resource/q6kt-v2zm.json"
+AUSTIN_ROAD_CLOSURES_URL = "https://data.austintexas.gov/resource/fw5i-n4te.json"  # may change; failure is surfaced
 
 
 def _parse_dt(value: str | None) -> datetime:
     if not value:
         return datetime.now(timezone.utc)
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except Exception:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
         return datetime.now(timezone.utc)
 
 
+def _content_fingerprint(item: dict[str, Any]) -> str:
+    payload = json.dumps(item, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
+
+
 def _map_crossing_to_event(item: dict[str, Any]) -> FloodEvent | None:
-    # Austin low-water crossings dataset fields: location_name, crossing_status, etc.
-    # We treat blocked/closed as severe.
-    name = item.get("location_name") or item.get("crossing_name") or item.get("address") or "Low-water crossing"
-    status = str(item.get("status") or item.get("crossing_status") or item.get("closure_status") or "unknown").lower()
-    # Some datasets have fields like location
+    name = item.get("crossing_description") or item.get("location_name") or item.get("crossing_name") or item.get("address") or "Low-water crossing"
+    crossing_type = item.get("crossing_type") or "Unknown"
+    gage_number = item.get("gage_number") or ""
+    raw_status = item.get("status") or item.get("crossing_status") or item.get("closure_status")
+    status = str(raw_status or "reference only").lower()
     lat = None
     lon = None
-    # geolocation sometimes in 'location' dict or separate lat/long
-    loc = item.get("location") or {}
-    if isinstance(loc, dict):
-        lat = loc.get("latitude")
-        lon = loc.get("longitude")
-        try:
-            if lat is not None:
-                lat = float(lat)
-            if lon is not None:
-                lon = float(lon)
-        except Exception:
-            lat = None
-            lon = None
-    if lat is None:
+    try:
+        if item.get("latitude"):
+            lat = float(item["latitude"])
+    except Exception:
+        pass
+    geom = item.get("the_geom") or {}
+    coords = geom.get("coordinates", []) if isinstance(geom, dict) else []
+    if lat is None and len(coords) >= 2:
+        lon, lat = coords[0], coords[1]
+    elif lat is None:
         try:
             if item.get("latitude"):
                 lat = float(item["latitude"])
@@ -53,31 +57,32 @@ def _map_crossing_to_event(item: dict[str, Any]) -> FloodEvent | None:
                 lon = float(item["longitude"])
         except Exception:
             pass
+    if lon is None and len(coords) >= 2:
+        lon = coords[0]
 
     severity = "unknown"
     if "closed" in status or "blocked" in status or "impassable" in status:
         severity = "severe"
     elif "open" in status:
         severity = "minor"
-    elif "caution" in status or "warning" in status:
-        severity = "moderate"
 
-    observed = _parse_dt(item.get("updated_at") or item.get("status_updated") or item.get("last_updated"))
-
-    event_id = f"austin-crossing-{item.get('crossing_id') or item.get('id') or name}-{observed.isoformat()}".replace(" ", "_")
-
-    title = f"Road closure: {name} is {status}" if status != "unknown" else f"Crossing status: {name}"
+    object_id = item.get("objectid") or item.get("unique_gis_id") or name
+    observed = _parse_dt(item.get("updated_at") or item.get("status_updated") or item.get("modified_date"))
+    event_id = f"austin-crossing-{object_id}-{_content_fingerprint(item)}"
 
     return FloodEvent(
         event_id=event_id,
         source="austin",
         observed_at=observed,
-        kind="road_closure" if "closed" in status else "crossing_status",
-        title=title,
+        kind="crossing_status" if raw_status is not None else "crossing_reference",
+        title=f"Crossing reference: {name} ({crossing_type})" if raw_status is None else f"Crossing status: {name} ({status})",
         severity=severity,
         location=name,
         latitude=lat,
         longitude=lon,
+        value=None,
+        unit=None,
+        freshness_seconds=max(0.0, (datetime.now(timezone.utc) - observed).total_seconds()) if any(item.get(key) for key in ("updated_at", "status_updated", "modified_date")) else None,
         provenance_url=AUSTIN_CROSSINGS_URL,
         raw=item,
         mode="live",
@@ -107,7 +112,7 @@ def _map_road_closure_to_event(item: dict[str, Any]) -> FloodEvent | None:
         except Exception:
             pass
 
-    event_id = f"austin-road-{item.get('id') or name}-{observed.isoformat()}".replace(" ", "_")[:120]
+    event_id = f"austin-road-{item.get('id') or name}-{_content_fingerprint(item)}".replace(" ", "_")[:120]
 
     return FloodEvent(
         event_id=event_id,
@@ -119,6 +124,7 @@ def _map_road_closure_to_event(item: dict[str, Any]) -> FloodEvent | None:
         location=name,
         latitude=lat,
         longitude=lon,
+        freshness_seconds=max(0.0, (datetime.now(timezone.utc) - observed).total_seconds()),
         provenance_url=AUSTIN_ROAD_CLOSURES_URL,
         raw=item,
         mode="live",
@@ -144,27 +150,22 @@ def parse_austin_road_closures(payload: list[dict[str, Any]], limit: int = 50) -
 
 
 async def fetch_austin_crossings(limit: int = 50) -> list[FloodEvent]:
-    params = {"$limit": str(limit), "$order": "updated_at DESC"}
+    params = {"$limit": str(limit)}
     async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
         resp = await client.get(AUSTIN_CROSSINGS_URL, params=params)
         resp.raise_for_status()
         data = resp.json()
         if not isinstance(data, list):
-            return []
+            raise RuntimeError("Austin crossing endpoint returned a non-list payload")
         return parse_austin_crossings(data, limit=limit)
 
 
 async def fetch_austin_road_closures(limit: int = 50) -> list[FloodEvent]:
-    # Try road closures endpoint; if fails, return empty not raise
-    try:
-        params = {"$limit": str(limit)}
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
-            resp = await client.get(AUSTIN_ROAD_CLOSURES_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-            if isinstance(data, list):
-                return parse_austin_road_closures(data, limit=limit)
-            return []
-    except Exception:
-        # Fallback: treat as no closures
-        return []
+    params = {"$limit": str(limit)}
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        resp = await client.get(AUSTIN_ROAD_CLOSURES_URL, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+    if not isinstance(data, list):
+        raise RuntimeError("Austin road-closure endpoint returned a non-list payload")
+    return parse_austin_road_closures(data, limit=limit)

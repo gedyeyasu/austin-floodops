@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Austin FloodOps — Offline Mode | Great State of Texas</title>
+  <title>Austin FloodOps — Offline Prototype</title>
   <style>
     :root { --bg:#070b0a; --text:#edf4f0; --muted:#91a39a; --green:#7cf7ad; --line:#26342e; }
     body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family: "IBM Plex Sans", system-ui, sans-serif; display:grid; place-items:center; padding:20px; }
@@ -23,18 +23,18 @@
       <svg width="40" height="40" viewBox="0 0 100 100" style="fill:#7cf7ad"><path d="M15 15 L85 15 L85 35 L70 35 L70 85 L50 85 L50 70 L30 70 L30 50 L15 50 Z" fill="none" stroke="#7cf7ad" stroke-width="2"/><text x="50" y="55" text-anchor="middle" font-family="monospace" font-size="10" fill="#7cf7ad" font-weight="bold">TX</text></svg>
     </div>
     <h1>Austin FloodOps — Offline Field Mode</h1>
-    <p><strong>Built for the Great State of Texas ⭐ TDEM Ready</strong></p>
-    <p>You're offline — FirstNet / field ops mode. Core dashboard is cached via Service Worker. Approvals you make will be queued in IndexedDB and synced when back online.</p>
-    <p style="color:var(--muted); font-size:0.9rem;">This PWA supports Texas field crews during connectivity degraded scenarios (Hill Country floods). Evidence remains locally queued, audit chain preserved, no data loss.</p>
+    <p><strong>Austin FloodOps interoperability prototype</strong></p>
+    <p>You are offline. Previously cached dashboard assets may remain available. Approval or rejection intent can be saved only as a browser-local draft.</p>
+    <p style="color:var(--muted); font-size:0.9rem;">Drafts never execute automatically. Reconnect, review current evidence, authenticate, and explicitly confirm again.</p>
     <div class="status" id="status">Checking cache...
-Pending approvals in IndexedDB: loading...
+Action drafts in IndexedDB: loading...
 Last heartbeat: unknown
 Texas flag: Lone Star State
-FOIA: 7yr retention local queue
+Retention: browser-local demo queue
     </div>
     <button onclick="location.href='/'">Return to Dashboard (cached)</button>
     <button onclick="checkQueue()">Check Offline Queue</button>
-    <p style="font-size:0.65rem; color:var(--muted); margin-top:16px;">⭐ THE GREAT STATE OF TEXAS • TDEM • LCRA • TXDOT • AUSTIN EOC • FOIA 7YR • LONE STAR STATE ⭐<br>Texas Division of Emergency Management Ready · FloodOps v0.3.0 Enterprise Gov-Grade</p>
+    <p style="font-size:0.65rem; color:var(--muted); margin-top:16px;">Austin FloodOps hackathon prototype · Not an authorized emergency dispatch system</p>
   </div>
   <script>
     async function checkQueue() {
@@ -51,8 +51,8 @@ FOIA: 7yr retention local queue
           req.onsuccess = () => {
             const items = req.result || [];
             document.getElementById('status').textContent = 
-              `Offline queue: ${items.length} pending approvals\n` +
-              items.map(i => `- ${i.action} ${i.incident_id} queued ${i.queued_at} synced=${i.synced||false}`).join('\n') +
+              `Offline drafts: ${items.length} require reconfirmation\n` +
+              items.map(i => `- ${i.action} ${i.incident_id} saved ${i.queued_at} status=${i.status||'requires_reconfirmation'}`).join('\n') +
               `\n\nLast check: ${new Date().toISOString()}\n Texas field ops mode active.`;
           };
         };

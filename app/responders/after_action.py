@@ -22,7 +22,7 @@ def generate_after_action_report(
     decision: IncidentDecision | None = None,
 ) -> dict[str, Any]:
     """
-    Generate after-action report with timeline, metrics, compliance, FOIA, positive_change_narrative.
+    Generate a draft after-action review with timeline, metrics, and records package.
     """
     decision = decision or store.get_decision(incident_id)
     if decision is None:
@@ -63,8 +63,9 @@ def generate_after_action_report(
     # Deliveries
     # We don't have direct list, but we can infer from existence checks? Let's check audit if available.
 
-    # Compliance: ensure evidence citations, policy_status, approval gate
-    compliance = {
+    # Mechanical control checks only. These values are not a legal, standards,
+    # safety, or records-compliance certification.
+    control_checks = {
         "evidence_cited": len(decision.citations) > 0,
         "provenance_preserved": all(ev.provenance_url for ev in events),
         "approval_gate_enforced": decision.proposed_action.approval_required is True,
@@ -79,7 +80,7 @@ def generate_after_action_report(
         audit_entries = audit_chain.list_for_incident(incident_id, limit=200)
         verify = audit_chain.verify_chain(incident_id)
         audit_verified = verify
-        compliance["audit_chain_verified"] = verify.get("verified") is True
+        control_checks["audit_chain_verified"] = verify.get("verified") is True
 
     # Metrics
     metrics = {
@@ -96,9 +97,9 @@ def generate_after_action_report(
         first_obs = min(ev.observed_at for ev in events)
         metrics["time_to_decision_seconds"] = (decision.created_at - first_obs).total_seconds()
 
-    # FOIA redaction: prepare version with sensitive fields removed
-    # In this context, we redact raw_model_response internals beyond summary?
-    foia = {
+    # Draft package for a records officer. This code does not make a release,
+    # classification, or retention determination.
+    records_package = {
         "incident_id": decision.incident_id,
         "created_at": _safe_iso(decision.created_at),
         "mode": decision.mode,
@@ -114,19 +115,19 @@ def generate_after_action_report(
         },
         "timeline": timeline,
         "redacted_fields": ["raw_model_response", "nvidia_api_key", "internal_reasoning"],
-        "disclaimer": "FOIA release - operational data preserved, pre-decisional AI reasoning redacted per agency guidance.",
+        "disclaimer": "Draft for records-officer review. No release decision, legal exemption, classification, or agency retention policy has been applied.",
     }
 
     # Positive change narrative - highlight learning and human oversight
     positive_change_narrative = (
-        f"On {_safe_iso(decision.created_at)}, Austin FloodOps processed {len(events)} official evidence items "
-        f"from sources {', '.join(metrics['unique_sources']) or 'NWS/USGS'} and proposed a {decision.proposed_action.action_type} "
+        f"On {_safe_iso(decision.created_at)}, Austin FloodOps processed {len(events)} evidence records "
+        f"from sources {', '.join(metrics['unique_sources']) or 'available sources'} and proposed a {decision.proposed_action.action_type} "
         f"for target {decision.proposed_action.target} at {decision.risk_level} risk. "
         f"The system enforced approval-required reversible action boundary, preserved provenance for all evidence, "
         f"and logged {len(audit_entries)} tamper-evident audit entries. "
-        f"Operator feedback ({len(feedbacks)} corrections) contributed to {len(memories)} playbook rules that improve future triage, "
-        f"demonstrating recursive improvement while maintaining human authority. "
-        f"This after-action report satisfies audit retention and FOIA readiness, supporting public accountability and operational learning."
+        f"Operator feedback ({len(feedbacks)} corrections) contributed to {len(memories)} versioned playbook rules available for later retrieval, "
+        f"demonstrating the learning mechanism while maintaining human authority. "
+        f"This draft supports review and learning; it does not establish legal compliance or operational effectiveness."
     )
 
     # Full report
@@ -143,13 +144,14 @@ def generate_after_action_report(
             "verification": audit_verified,
         },
         "metrics": metrics,
-        "compliance": compliance,
-        "foia_package": foia,
+        "control_checks": control_checks,
+        "control_scope": "Mechanical prototype checks only; no legal, standards, safety, records, or operational certification is implied.",
+        "records_review_package": records_package,
         "positive_change_narrative": positive_change_narrative,
         "retention": {
             "sqlite_authoritative": True,
             "audit_chain": audit_chain is not None,
             "supabase_mirror": "optional",
-            "foia_ready": True,
+            "agency_policy_applied": False,
         },
     }

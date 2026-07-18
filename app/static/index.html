@@ -5,11 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>Austin FloodOps · Enterprise Ops Console v0.3.0</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
   <style>
     :root {
       --bg: #070b0a;
@@ -191,13 +188,13 @@
         </svg>
       </div>
       <div>
-        <h1>Austin FloodOps v0.3.0 Enterprise</h1>
-        <p>DECISION SUPPORT · HUMAN AUTHORITY · GOV-GRADE · THE GREAT STATE OF TEXAS</p>
-        <p style="font-size:0.55rem; letter-spacing:0.12em; color:var(--green); margin-top:2px; font-weight:700;">⭐ BUILT FOR THE GREAT STATE OF TEXAS ⭐ TDEM READY · LCRA · TXDOT · AUSTIN EOC</p>
+        <h1>Austin FloodOps v0.3.0</h1>
+        <p>LIVE FLOOD DECISION SUPPORT · HUMAN AUTHORITY · TEXAS</p>
+        <p style="font-size:0.55rem; letter-spacing:0.12em; color:var(--green); margin-top:2px; font-weight:700;">OFFICIAL PUBLIC EVIDENCE · APPROVAL-GATED ACTIONS · PROTOTYPE</p>
       </div>
     </div>
     <nav class="top-actions" aria-label="Primary demo controls">
-      <div class="heartbeat"><span id="pulse" class="pulse"></span><span id="heartbeat-label">HEARTBEAT CHECKING</span></div>
+      <div class="heartbeat"><span id="pulse" class="pulse"></span><span id="heartbeat-label">CHECKING HEARTBEAT</span><span id="auto-started-badge" class="verdict allow" style="display:none; margin-left:8px; border:1px solid #286f45; background:var(--green-dark); padding:2px 6px; font-size:0.6rem;">AUTONOMOUS</span><span style="margin-left:8px; font-size:0.65rem; opacity:0.8;">NWS + USGS + Austin refresh every 30s</span></div>
       <button id="live-button">Run live scan</button>
       <button id="evaluation-button" class="primary">Run learning evaluation</button>
     </nav>
@@ -243,12 +240,13 @@
         <h2>RBAC quick switch (demo)</h2>
         <div class="control-stack" style="gap:6px">
           <input id="token-sub" placeholder="sub e.g. operator" value="demo-operator"/>
-          <select id="token-role"><option>viewer</option><option selected>operator</option><option>supervisor</option><option>admin</option><option>auditor</option><option>system</option></select>
+          <select id="token-role"><option>viewer</option><option selected>operator</option><option>supervisor</option><option>admin</option><option>auditor</option></select>
+          <input id="token-bootstrap" type="password" autocomplete="off" placeholder="Bootstrap token when RBAC is enabled"/>
           <div class="row">
             <button onclick="getTokenAs()">Get token as role</button>
             <button onclick="setAuthToken(prompt('Paste JWT'))">Set token</button>
           </div>
-          <button onclick="localStorage.removeItem('af-jwt'); updateAuthPanel();">Clear token (demo mode)</button>
+          <button onclick="clearAuthToken()">Clear in-memory token</button>
           <div id="auth-status" class="status-line mono">No token set, RBAC disabled = system role</div>
         </div>
       </section>
@@ -330,33 +328,84 @@
         </section>
 
         <section class="panel" aria-labelledby="after-action-panel-title">
-          <h2 id="after-action-panel-title">After-action · FOIA & compliance</h2>
-          <div id="after-action-box" class="empty">Generate after-action for current incident to get FOIA package, timeline, metrics, audit verification, positive narrative.</div>
+          <h2 id="after-action-panel-title">After-action · records review draft</h2>
+          <div id="after-action-box" class="empty">Generate a draft timeline, metrics summary, audit verification, and records-review package.</div>
           <pre id="after-action-pre" style="max-height:300px"></pre>
           <div class="control-stack" style="grid-template-columns:1fr 1fr; display:grid; gap:6px; margin-top:8px;">
-            <button onclick="exportCSV('events')">Export Events CSV · FOIA</button>
+            <button onclick="exportCSV('events')">Export Events CSV</button>
             <button onclick="exportCSV('decisions')">Export Decisions CSV</button>
-            <button onclick="exportEDXL()">Export EDXL-DE · TDEM</button>
-            <button onclick="exportFOIA()">FOIA Bundle · CAP+EDXL+CSV</button>
+            <button onclick="exportEDXL()">Export EDXL-DE Draft</button>
+            <button onclick="exportFOIA()">Records Bundle Draft</button>
+          </div>
+        </section>
+
+        <section class="panel full" aria-labelledby="webeoc-title" style="border:2px solid var(--blue); background: linear-gradient(180deg, #0a101d 0, var(--bg) 100%);">
+          <h2 id="webeoc-title">WebEOC Message Export Prototype · CAP 1.2 + SOAP AddData</h2>
+          <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+            <span style="background:#002868; color:white; padding:2px 6px; font:600 0.6rem monospace;">WebEOC ADAPTER</span>
+            <span style="background:#BF0A30; color:white; padding:2px 6px; font:600 0.6rem monospace;">CAP 1.2 TEST MESSAGE</span>
+            <span style="background:var(--blue); color:#04130a; padding:2px 6px; font:600 0.6rem monospace;">EDXL-DE DRAFT · SOAP PREVIEW</span>
+            <span style="background:#7cf7ad; color:#04130a; padding:2px 6px; font:600 0.6rem monospace;">APPROVAL-GATED REVERSIBLE</span>
+          </div>
+          <div id="webeoc-box" class="empty">No incident ready for export. This adapter is not connected to or authorized by an agency; it blocks delivery without organization-provided sandbox credentials.</div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:10px;">
+            <div>
+              <h3 style="font-size:0.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px;">Current Approval Status</h3>
+              <div id="webeoc-approval-status" class="status-line">Waiting for decision...</div>
+              <h3 style="font-size:0.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin:8px 0 6px;">Should Approve? Guidance</h3>
+              <div id="webeoc-guidance" class="status-line">Run scenario first.</div>
+              <div style="margin-top:10px;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; cursor:pointer;"><input type="checkbox" id="webeoc-confirm-checkbox" style="width:auto;"> <span>I have reviewed the CAP payload and confirm sending to downstream WebEOC (confirm=true)</span></label>
+              </div>
+              <div class="control-stack" style="grid-template-columns:1fr 1fr; display:grid; gap:6px; margin-top:8px;">
+                <button id="webeoc-preview-button" class="primary">Preview CAP + SOAP Message</button>
+                <button id="webeoc-send-button" class="danger" disabled>Attempt Configured WebEOC Delivery</button>
+              </div>
+              <div id="webeoc-delivery-status" class="status-line">Delivery: not sent yet. Idempotent — second send returns already_delivered.</div>
+              <div style="margin-top:8px; padding:8px; border:1px dashed var(--blue); background:#0a101d; font-size:0.7rem; color:var(--muted);">
+                <b style="color:var(--blue);">INTEGRATION STATUS:</b> Standards-compatible preview only. No Texas agency authorization or production WebEOC connection is claimed. Delivery remains blocked until an authorized agency supplies and validates the endpoint, board configuration, and credentials.
+              </div>
+            </div>
+            <div>
+              <h3 style="font-size:0.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px;">Prototype Message Preview</h3>
+              <details open><summary>CAP 1.2 XML Test Preview</summary><pre id="webeoc-cap-pre" style="max-height:180px; font-size:0.6rem;"></pre><div style="font-size:0.65rem; color:var(--muted); margin-top:4px;">The Common Alerting Protocol document uses status Test and sender austin-floodops-prototype. It is not an official public warning. The local export is side-effect free.</div></details>
+              <details style="margin-top:8px;"><summary>SOAP AddData Envelope Preview</summary><pre id="webeoc-soap-pre" style="max-height:220px; font-size:0.58rem;"></pre><div style="font-size:0.65rem; color:var(--muted); margin-top:4px;">The Simple Object Access Protocol preview demonstrates the AddData shape, redacted credentials, and idempotency key. The receiving organization must validate its endpoint, board, view, and schema before delivery is enabled.</div></details>
+              <details style="margin-top:8px;"><summary>Authorized Sandbox Flow — Step by Step</summary><pre id="webeoc-flow-pre" style="max-height:200px; font-size:0.62rem; white-space:pre-wrap;">1. Heartbeat gathers observed public evidence; unavailable optional feeds remain degraded
+2. Nemotron produces typed decision with risk_level, confidence, 3 citations, proposed_action reversible-only
+3. Policy engine returns approval_required if high/catastrophic
+4. Operator reviews center panel: risk badge, confidence %, 3 citations, proposed action, impact metrics depth/exposure/delay, map markers — must approve reversible action button
+5. POST /api/decisions/{id}/approve sets policy_status allowed, audit approved with actor_id/role hash chain SHA256, state chip successful-approval green
+6. A separate handoff requires confirm=true after reviewing the CAP Test payload
+7. Backend checks confirm=true AND policy_status==allowed AND not already_delivered (idempotency) AND WebEOC config valid
+8. Builds CAP 1.2 Test XML via build_cap_alert(decision) — side-effect free local
+9. Wraps CAP XML in SOAP AddData envelope: Envelope Body AddData credentials Username Password Position Incident BoardName InputViewName XmlData=cap_xml, headers Content-Type text/xml SOAPAction Idempotency-Key
+10. Only an authorized sandbox configuration may receive the Test message
+11. The response is recorded idempotently; a duplicate attempt returns already_delivered
+</pre></details>
+            </div>
+          </div>
+          <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button onclick="openCAP()">Open CAP Test XML</button>
+            <button onclick="exportFOIA()">Records Bundle Includes CAP+EDXL+</button>
           </div>
         </section>
 
         <section class="panel full" aria-labelledby="resources-title">
-          <h2 id="resources-title">Texas Resource Management · Barricades · High-Water Vehicles · Shelters · Personnel · The Great State of Texas</h2>
+          <h2 id="resources-title">Fictional Exercise Inventory · Barricades · Vehicles · Shelters · Personnel</h2>
           <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
             <span style="background:#002868; color:white; padding:2px 6px; font:600 0.6rem monospace;">TEXAS</span>
             <span style="background:white; color:#002868; border:1px solid #002868; padding:2px 6px; font:600 0.6rem monospace;">LONE STAR STATE</span>
             <span style="background:#BF0A30; color:white; padding:2px 6px; font:600 0.6rem monospace;">BUILT FOR THE GREAT STATE OF TEXAS</span>
-            <span style="background:#7cf7ad; color:#04130a; padding:2px 6px; font:600 0.6rem monospace;">TDEM READY · LCRA · TXDOT</span>
+            <span style="background:#7cf7ad; color:#04130a; padding:2px 6px; font:600 0.6rem monospace;">DEMO INVENTORY · HUMAN APPROVAL</span>
           </div>
-          <div id="resources-box" class="empty">Loading Texas resources: barricades, high-water vehicles, shelters, personnel, gates, pumps for Travis County/Austin EOC...</div>
+          <div id="resources-box" class="empty">Loading fictional exercise resources. No agency availability or capability is represented.</div>
           <div id="resources-list" class="security-list" style="max-height:260px; overflow:auto;"></div>
           <div class="control-stack" style="grid-template-columns:1fr 1fr 1fr; display:grid; gap:6px; margin-top:8px;">
             <button onclick="loadResources()">Refresh Resources</button>
-            <button onclick="assignNearestResource()">Assign Nearest to Incident</button>
+            <button onclick="assignNearestResource()">Assign First Available Exercise Resource</button>
             <button onclick="releaseAllResources()">Release All</button>
           </div>
-          <div id="resources-status" class="status-line">Texas resources seeded: 12 default for Travis County.</div>
+          <div id="resources-status" class="status-line">Demo inventory is seeded locally; it is not connected to an agency asset system.</div>
         </section>
 
         <section class="panel full" aria-labelledby="texas-data-title">
@@ -367,17 +416,17 @@
             <span style="border:1px solid var(--amber); color:var(--amber); padding:2px 6px; font:600 0.6rem monospace;">Austin 311 · Flood Reports · FEWS</span>
             <span style="background:#002868; color:white; padding:2px 6px; font:600 0.6rem monospace;">⭐ GREAT STATE OF TEXAS ⭐</span>
           </div>
-          <div id="texas-data-box" class="empty">Texas data fabric: LCRA river stages (Colorado River at Austin Loop 360, Lake Travis, Pedernales, Llano) + TxDOT closures (RM 1431 Marble Falls, US 281 Johnson City, SH 71 Spicewood) + Austin 311 flood reports. Gov-grade sources for multi-county coordination.</div>
+          <div id="texas-data-box" class="empty">Texas source adapters attempt LCRA river stages, TxDOT closures, and Austin 311 reports. Only successfully parsed public records are displayed; unavailable feeds remain visibly degraded.</div>
           <div id="texas-data-list" class="security-list" style="max-height:200px; overflow:auto;"></div>
           <div class="control-stack" style="grid-template-columns:1fr 1fr; display:grid; gap:6px; margin-top:8px;">
             <button onclick="loadTexasData()">Load Texas Data Fabric (LCRA+TxDOT+311)</button>
             <button onclick="loadFloodplain()">Load Floodplain + Texas Overlay</button>
           </div>
-          <div id="texas-data-status" class="status-line">LCRA synthetic demo when live API unavailable — shows integration capability, real would parse hydromet.lcra.org JSON. TxDOT would use Apify $50 scraper in production.</div>
+          <div id="texas-data-status" class="status-line">Only observed source records are displayed. Unavailable or unsupported feeds are marked degraded.</div>
         </section>
 
         <section class="panel full" aria-labelledby="pwa-title">
-          <h2 id="pwa-title">PWA Offline FirstNet · Field Ops · Texas</h2>
+          <h2 id="pwa-title">Offline continuity prototype · Field Ops · Texas</h2>
           <div id="pwa-box" class="empty">Service Worker floodops-v0.4.0-texas caches core + queues approvals in IndexedDB when offline. Texas field crews during connectivity degraded (Hill Country floods).</div>
           <div class="control-stack" style="grid-template-columns:1fr 1fr; display:grid; gap:6px;">
             <button onclick="checkServiceWorker()">Check SW + Offline Queue</button>
@@ -406,7 +455,7 @@
       </section>
 
       <section class="section" aria-labelledby="integration-title">
-        <h2 id="integration-title">Integration gate (16)</h2>
+        <h2 id="integration-title">Integration gate</h2>
         <div id="integrations" class="integration-list"></div>
         <div class="control-stack" style="margin-top:10px">
           <button onclick="probeVLLM()">Probe vLLM /v1/models + chat</button>
@@ -432,7 +481,16 @@
     let mapObj = null;
     let mapLayers = [];
     let floodplainLayer = null;
-    let authToken = localStorage.getItem('af-jwt') || '';
+    // Authentication tokens intentionally live only in memory. A page reload
+    // requires a new token instead of leaving an operator credential at rest.
+    let authToken = '';
+    // Auto-start dashboard tracking per hackathon spec
+    let lastEventCount = -1;
+    let lastDecisionId = null;
+    let evaluationCache = null;
+    let countdownInterval = null;
+    let nextHeartbeatSeconds = 30;
+    let lastHeartbeatData = null;
 
     function state(name, kind = 'active') {
       const chip = document.querySelector(`[data-state="${name}"]`);
@@ -472,8 +530,14 @@
       currentEvents = events || [];
       $('event-count').textContent = `${events.length} EVENT${events.length === 1 ? '' : 'S'}`;
       if (!events.length) {
-        $('timeline').innerHTML = '<div class="empty">No evidence received.<br>Heartbeat remains fail-closed.</div>';
-        state('no-incidents', 'active');
+        const isHeartbeatRunning = lastHeartbeatData && lastHeartbeatData.running !== false && (lastHeartbeatData.enabled !== false);
+        if (isHeartbeatRunning) {
+          $('timeline').innerHTML = `<div class="empty" id="waiting-empty">Waiting for next heartbeat cycle...<br><span id="countdown-timer" class="mono" style="color:var(--green); font-size:0.9rem;">Next poll in ${nextHeartbeatSeconds}s</span><br><small>Heartbeat polling NWS + USGS + Austin every 30s · Auto-started</small></div>`;
+          startCountdownTimer();
+        } else {
+          $('timeline').innerHTML = '<div class="empty">No evidence received.<br>Heartbeat remains fail-closed.</div>';
+        }
+        state('no-incidents', isHeartbeatRunning ? '' : 'active');
         renderMap();
         return;
       }
@@ -486,6 +550,33 @@
           <small>${escapeHtml(event.location || 'Location pending')}<span class="mode-label">${escapeHtml(event.mode.toUpperCase())}</span></small>
         </article>`).join('');
       renderMap();
+      stopCountdownTimer();
+    }
+
+    function startCountdownTimer() {
+      if (countdownInterval) return;
+      nextHeartbeatSeconds = 30;
+      const timerEl = () => document.getElementById('countdown-timer');
+      countdownInterval = setInterval(() => {
+        nextHeartbeatSeconds = Math.max(0, nextHeartbeatSeconds - 1);
+        const el = timerEl();
+        if (el) {
+          el.textContent = `Next poll in ${nextHeartbeatSeconds}s`;
+          if (nextHeartbeatSeconds === 0) {
+            el.textContent = 'Polling now...';
+            nextHeartbeatSeconds = 30;
+          }
+        } else {
+          if (currentEvents.length > 0) stopCountdownTimer();
+        }
+      }, 1000);
+    }
+
+    function stopCountdownTimer() {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
     }
 
     function renderImpact(estimate) {
@@ -506,7 +597,7 @@
         ['HiddenLayer interaction scan', hidden.status, hidden.detail || 'Model input/output boundary'],
         ['OpenShell action boundary', shell.status, shell.decision],
         ['Approval policy', policy.status, policy.reason],
-        ['Kafka evidence publish', kafka.status, `${kafka.published || 0} new event(s)`],
+        ['Kafka publish → consume → assess', kafka.status, `published ${kafka.published || 0} · consumed ${kafka.consumed || 0} · fallback ${kafka.fallback || 0}`],
         ['vLLM fallback', (security.vllm||{}).status || 'not_used', 'Open-weight fallback probe'],
       ].map(([name, verdict, detail]) => `<div class="security-item"><span>${escapeHtml(name)}<br><small>${escapeHtml(detail || '')}</small></span><span class="verdict ${escapeHtml(verdict)}">${escapeHtml(verdict)}</span></div>`).join('');
       if (['blocked','quarantined'].includes(policy.status) || hidden.status === 'blocked') state('blocked-action', 'danger');
@@ -532,7 +623,7 @@
       const severe = ['high','catastrophic'].includes(d.risk_level);
       $('mode-kicker').textContent = `${d.mode} assessment · ${d.model_name}`;
       $('incident-title').textContent = d.summary;
-      $('incident-summary').textContent = `${d.evidence_event_ids.length} cited evidence items. Human approval remains required before any responder handoff.`;
+      $('incident-summary').textContent = `${d.evidence_event_ids.length} evidence items · ${(d.citations || []).length} unique cited records. Human approval remains required before any responder handoff.`;
       $('risk-level').textContent = d.risk_level.toUpperCase();
       $('confidence').textContent = `${Math.round(d.confidence * 100)}% confidence`;
       $('risk-block').classList.toggle('danger', severe);
@@ -638,6 +729,11 @@
     async function approveCurrent() {
       if (!currentDecision) return;
       const result = await request(`/api/decisions/${currentDecision.incident_id}/approve`, {method:'POST'});
+      if (result.status === 'drafted_offline') {
+        $('operator-status').textContent = result.detail;
+        state('pending-approval', 'active');
+        return;
+      }
       currentDecision.policy_status = result.status;
       state('pending-approval', '');
       state('successful-approval', result.status === 'allowed' ? 'success' : 'danger');
@@ -649,6 +745,11 @@
     async function rejectCurrent() {
       if (!currentDecision) return;
       const result = await request(`/api/decisions/${currentDecision.incident_id}/reject`, {method:'POST'});
+      if (result.status === 'drafted_offline') {
+        $('operator-status').textContent = result.detail;
+        state('pending-approval', 'active');
+        return;
+      }
       currentDecision.policy_status = 'blocked';
       state('pending-approval', ''); state('rejected', 'danger'); state('blocked-action', 'danger');
       $('operator-status').textContent = result.reason;
@@ -682,7 +783,7 @@
         const result = await request('/api/security/adversarial-test', {method:'POST'});
         state('quarantined-payload', 'danger'); state('blocked-action', 'danger');
         $('operator-status').textContent = `${result.status.toUpperCase()}: ${result.detail || 'Unsafe payload blocked.'}`;
-        renderSecurity({hiddenlayer:result.hiddenlayer, openshell:{status:'enforced',decision:'deny exfiltration'}, policy:{status:result.policy,reason:'Adversarial test cannot reach an action channel'}, kafka:{status:'skipped'}});
+        renderSecurity({hiddenlayer:result.hiddenlayer, openshell:{status:'not_verified',decision:'Adversarial endpoint did not run an OpenShell gateway probe'}, policy:{status:result.policy,reason:'Adversarial test cannot reach an action channel'}, kafka:{status:'skipped'}});
       } finally { loading(false); }
     }
 
@@ -705,6 +806,7 @@
     async function refreshSystem() {
       try {
         const [health, heartbeat, events] = await Promise.all([request('/health'), request('/api/heartbeat'), request('/api/events')]);
+        $('integration-title').textContent = `Integration gate (${health.integrations.length})`;
         $('integrations').innerHTML = health.integrations.map(item => `<div class="integration-item"><span>${escapeHtml(item.name)}<br><small>${escapeHtml(item.detail)}</small></span><span class="verdict ${item.verified ? 'verified' : item.configured ? '' : 'degraded'}">${item.verified ? 'verified' : item.configured ? 'configured' : 'omitted'}</span></div>`).join('');
         const active = heartbeat.enabled && heartbeat.running;
         $('pulse').classList.toggle('live', active);
@@ -890,13 +992,13 @@
     async function generateAfterAction() {
       if (!currentDecision) { $('after-action-box').innerHTML='<div class="status-line error">No current decision.</div>'; return; }
       loading(true);
-      $('after-action-box').innerHTML = '<div class="empty">Generating after-action report with timeline, metrics, compliance, FOIA…</div>';
+      $('after-action-box').innerHTML = '<div class="empty">Generating draft after-action timeline, controls summary, and records package…</div>';
       try {
         const report = await request(`/api/after-action/${currentDecision.incident_id}`, {method:'POST'});
         $('after-action-box').innerHTML = `<p><b>Metrics:</b> evidence ${report.metrics.evidence_count} sources ${escapeHtml(report.metrics.unique_sources.join(','))} feedback ${report.metrics.feedback_count} memories ${report.metrics.memory_count}</p>
-          <p><b>Compliance:</b> ${escapeHtml(JSON.stringify(report.compliance))}</p>
+          <p><b>Control checks:</b> ${escapeHtml(JSON.stringify(report.control_checks))}</p>
           <p><b>Narrative:</b> ${escapeHtml(report.positive_change_narrative)}</p>
-          <details><summary>FOIA package</summary><pre>${escapeHtml(JSON.stringify(report.foia_package, null, 2))}</pre></details>`;
+          <details><summary>Records-review package</summary><pre>${escapeHtml(JSON.stringify(report.records_review_package, null, 2))}</pre></details>`;
         $('after-action-pre').textContent = JSON.stringify(report, null, 2).slice(0,8000);
       } catch (e) {
         $('after-action-box').innerHTML = `<div class="status-line error">After-action failed: ${escapeHtml(e.message)}</div>`;
@@ -905,21 +1007,21 @@
 
     // === Texas Resources ===
     async function loadResources() {
-      $('resources-box').innerHTML = '<div class="empty">Loading Texas resources...</div>';
+        $('resources-box').innerHTML = '<div class="empty">Loading fictional exercise resources...</div>';
       try {
         const resources = await request('/api/resources?limit=100');
         if (!resources.length) {
           $('resources-box').innerHTML = '<div class="empty">No resources found.</div>';
           return;
         }
-        $('resources-box').innerHTML = `<div class="status-line">${resources.length} Texas resources: barricades, high-water vehicles, shelters, personnel, gates, pumps for Travis County / Austin EOC</div>`;
+        $('resources-box').innerHTML = `<div class="status-line">${resources.length} local exercise records. Names, availability, capacity, training, and locations are fictional until an authorized organization connects its inventory.</div>`;
         $('resources-list').innerHTML = resources.map(r => `
           <div class="security-item">
             <span><b>${escapeHtml(r.name)}</b> [${escapeHtml(r.type)}] ${escapeHtml(r.status)}<br><small>${escapeHtml(r.location||'')} ${r.latitude?` ${r.latitude},${r.longitude}`:''} cap ${r.capacity||0} ${r.assigned_incident_id?`→ ${r.assigned_incident_id.slice(0,8)}…`:''}<br>${escapeHtml(r.notes||'')}</small></span>
             <span class="verdict ${r.status==='available'?'verified':r.status==='deployed'?'blocked':'allow'}">${escapeHtml(r.status)}</span>
           </div>
         `).join('');
-        $('resources-status').textContent = `Texas resources: ${resources.filter(r=>r.status==='available').length} available, ${resources.filter(r=>r.status==='deployed').length} deployed, ${resources.filter(r=>r.type==='barricade').length} barricades, ${resources.filter(r=>r.type==='shelter').length} shelters - Built for the Great State of Texas`;
+        $('resources-status').textContent = `Exercise inventory: ${resources.filter(r=>r.status==='available').length} marked available, ${resources.filter(r=>r.status==='deployed').length} marked deployed, ${resources.filter(r=>r.type==='barricade').length} barricades, ${resources.filter(r=>r.type==='shelter').length} shelters. These are fictional workflow records.`;
       } catch (e) {
         $('resources-box').innerHTML = `<div class="status-line error">Resources load failed: ${escapeHtml(e.message)}</div>`;
       }
@@ -933,8 +1035,8 @@
         const barricades = resources.filter(r=>r.type==='barricade');
         const target = barricades[0] || resources[0];
         if (!target) { $('resources-status').textContent = 'No available resources to assign.'; return; }
-        const result = await request(`/api/resources/${target.id}/assign?incident_id=${currentDecision.incident_id}&distance_m=1200&eta_minutes=15`, {method:'POST'});
-        $('resources-status').textContent = `Assigned ${result.resource_id} to ${result.incident_id.slice(0,8)} by ${result.by} - Texas gov resource optimization`;
+        const result = await request(`/api/resources/${target.id}/assign?incident_id=${currentDecision.incident_id}`, {method:'POST'});
+        $('resources-status').textContent = `First available exercise record assigned: ${result.resource_id} to ${result.incident_id.slice(0,8)} by ${result.by}. No distance was calculated and no real asset was dispatched.`;
         await loadResources();
         await refreshAudit();
       } catch (e) {
@@ -973,23 +1075,21 @@
         const texasSources = ['lcra','txdot','austin_311','austin_crossings','austin_roads'];
         let html = `<div class="status-line">LCRA: ${sources.lcra?.events||0} events, TxDOT: ${sources.txdot?.events||0}, Austin 311: ${sources.austin_311?.events||0}, Crossings: ${sources.austin_crossings?.events||0}</div>`;
         html += `<div class="security-list">`;
-        html += `<div class="security-item"><span><b>LCRA Hydromet</b> Colorado River Basin - Loop 360, Lake Travis, Pedernales, Llano<br><small>Stages for Travis/Burnet/Llano counties, Hill Country floods critical</small></span><span class="verdict ${sources.lcra?.status==='ok'?'verified':'degraded'}">${sources.lcra?.status||'unknown'}</span></div>`;
-        html += `<div class="security-item"><span><b>TxDOT DriveTexas</b> RM 1431 Marble Falls, US 281 Johnson City, SH 71 Spicewood, FM 734 Parmer<br><small>Road closures for evacuation routing, would use Apify $50 scraper in prod</small></span><span class="verdict ${sources.txdot?.status==='ok'?'verified':'degraded'}">${sources.txdot?.status||'unknown'}</span></div>`;
+        html += `<div class="security-item"><span><b>LCRA Hydromet</b><br><small>Unavailable or unsupported responses are marked degraded; no synthetic readings are created.</small></span><span class="verdict ${sources.lcra?.status==='ok'?'verified':'degraded'}">${sources.lcra?.status||'unknown'}</span></div>`;
+        html += `<div class="security-item"><span><b>TxDOT DriveTexas</b><br><small>Only observed closure records are accepted; no synthetic road closures are created.</small></span><span class="verdict ${sources.txdot?.status==='ok'?'verified':'degraded'}">${sources.txdot?.status||'unknown'}</span></div>`;
         html += `<div class="security-item"><span><b>Austin 311</b> Flood reports ge9s-5vkx<br><small>311 service requests for flooding</small></span><span class="verdict ${sources.austin_311?.status==='ok'?'verified':'degraded'}">${sources.austin_311?.status||'unknown'}</span></div>`;
         html += `</div>`;
         $('texas-data-box').innerHTML = html;
         $('texas-data-status').textContent = `Texas Data Fabric loaded: LCRA ${sources.lcra?.events||0}, TxDOT ${sources.txdot?.events||0}, 311 ${sources.austin_311?.events||0} - Great State of Texas multi-county coordination`;
         // Show in map
         const map = ensureMap();
-        if (map && lcra.length===0) {
-          // Add synthetic LCRA markers already in map via events
-        }
+        if (map && lcra.length === 0) $('texas-data-status').textContent += ' · LCRA currently has no observed records';
       } catch (e) {
         $('texas-data-box').innerHTML = `<div class="status-line error">Texas data load failed: ${escapeHtml(e.message)}</div>`;
       }
     }
 
-    // === FOIA Exports ===
+    // === Records-review exports ===
     async function exportCSV(type) {
       const url = type==='events' ? '/api/export/events.csv?limit=500' : '/api/export/decisions.csv?limit=200';
       try {
@@ -1001,7 +1101,7 @@
         a.href = urlBlob;
         a.download = `floodops-${type}-${new Date().toISOString().slice(0,10)}.csv`;
         a.click();
-        $('operator-status').textContent = `FOIA CSV exported: ${type} ${blob.size} bytes - Texas Public Information Act 7yr retention`;
+        $('operator-status').textContent = `CSV exported for records review: ${type} ${blob.size} bytes. No retention or release policy is implied.`;
       } catch (e) {
         $('operator-status').textContent = `CSV export failed: ${e.message}`;
       }
@@ -1018,31 +1118,44 @@
         a.href = urlBlob;
         a.download = `${currentDecision.incident_id}-EDXL-DE.xml`;
         a.click();
-        $('operator-status').textContent = `EDXL-DE exported: ${currentDecision.incident_id} - TDEM compatible`;
+        $('operator-status').textContent = `EDXL-DE draft exported: ${currentDecision.incident_id}. Receiver validation is still required.`;
       } catch (e) {
         $('operator-status').textContent = `EDXL export failed: ${e.message}`;
       }
     }
 
+    async function openCAP() {
+      if (!currentDecision) { $('operator-status').textContent = 'No incident for CAP Test export'; return; }
+      try {
+        const response = await fetch(`/api/decisions/${currentDecision.incident_id}/cap`, {headers: authHeaders()});
+        if (!response.ok) throw new Error(await response.text());
+        const objectUrl = URL.createObjectURL(await response.blob());
+        window.open(objectUrl, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      } catch (error) {
+        $('operator-status').textContent = `CAP Test export failed: ${error.message}`;
+      }
+    }
+
     async function exportFOIA() {
-      if (!currentDecision) { $('operator-status').textContent = 'No incident for FOIA bundle'; return; }
+      if (!currentDecision) { $('operator-status').textContent = 'No incident for records bundle'; return; }
       try {
         const data = await request(`/api/decisions/${currentDecision.incident_id}/foia`);
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
         const urlBlob = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = urlBlob;
-        a.download = `${currentDecision.incident_id}-FOIA-bundle.json`;
+        a.download = `${currentDecision.incident_id}-records-review-bundle.json`;
         a.click();
-        $('operator-status').textContent = `FOIA bundle exported: ${data.texas_banner} - CAP + EDXL + CSV + after-action`;
+        $('operator-status').textContent = `Draft records bundle exported: ${data.texas_banner} - CAP Test + EDXL draft + CSV + after-action`;
         $('after-action-pre').style.display='block';
         $('after-action-pre').textContent = JSON.stringify(data, null,2).slice(0,8000);
       } catch (e) {
-        $('operator-status').textContent = `FOIA bundle failed: ${e.message}`;
+        $('operator-status').textContent = `Records bundle failed: ${e.message}`;
       }
     }
 
-    // === PWA Offline FirstNet ===
+    // === Offline continuity prototype ===
     async function checkServiceWorker() {
       try {
         if (!('serviceWorker' in navigator)) {
@@ -1050,7 +1163,7 @@
           return;
         }
         const regs = await navigator.serviceWorker.getRegistrations();
-        $('pwa-status').textContent = `SW: ${regs.length} registered, cache ${CACHE_NAME||'floodops-v0.4.0-texas'} - Built for Great State of Texas offline FirstNet field ops`;
+        $('pwa-status').textContent = `Service worker: ${regs.length} registered - browser-local continuity prototype`;
         // Check IndexedDB queue
         const dbReq = indexedDB.open('floodops-offline-queue', 1);
         dbReq.onsuccess = () => {
@@ -1063,12 +1176,12 @@
           const req = tx.objectStore('pending-approvals').getAll();
           req.onsuccess = () => {
             const items = req.result || [];
-            $('pwa-status').textContent += ` | Offline queue: ${items.length} pending approvals`;
-            $('pwa-box').innerHTML = `<div class="status-line">Offline queue ${items.length} items: ${items.map(i=>i.incident_id.slice(0,8)+':'+i.action).join(', ') || 'empty'} - Texas field ops FirstNet</div>`;
+            $('pwa-status').textContent += ` | Offline drafts: ${items.length} require reconfirmation`;
+            $('pwa-box').innerHTML = `<div class="status-line">Browser-local action drafts ${items.length}: ${items.map(i=>i.incident_id.slice(0,8)+':'+i.action).join(', ') || 'empty'}. No draft is executed automatically.</div>`;
           };
         };
         // Check manifest
-        $('pwa-box').innerHTML = `<div class="status-line">PWA manifest loaded - name: Austin FloodOps Great State of Texas, display standalone, Texas flag icon, categories government emergency - offline.html cached</div>`;
+        $('pwa-box').innerHTML = `<div class="status-line">Progressive web app manifest loaded with standalone display and utilities/productivity categories. Offline action drafts always require reconfirmation.</div>`;
       } catch (e) {
         $('pwa-status').textContent = 'SW check failed: '+e.message;
       }
@@ -1093,12 +1206,11 @@
             incident_id,
             action: 'approve',
             queued_at: new Date().toISOString(),
-            actor_id: 'field-operator-firstnet-texas',
-            synced: false
+            status: 'requires_reconfirmation'
           });
           tx.oncomplete = () => {
-            $('pwa-status').textContent = `Queued offline approval for ${incident_id.slice(0,8)} - will sync when back online via ServiceWorker sync tag floodops-sync-approvals - Texas Lone Star State field ops`;
-            $('pwa-box').innerHTML = `<div class="status-line">Queued offline ${incident_id.slice(0,8)} approve - Texas field ops FirstNet - will auto-sync</div>`;
+            $('pwa-status').textContent = `Saved offline approval intent for ${incident_id.slice(0,8)} as a local draft. It will not sync automatically.`;
+            $('pwa-box').innerHTML = `<div class="status-line">Draft ${incident_id.slice(0,8)} requires reconnect, current-evidence review, authentication, and explicit reconfirmation.</div>`;
           };
         };
       } catch (e) {
@@ -1117,7 +1229,11 @@
     function setAuthToken(token) {
       if (!token) return;
       authToken = token.trim();
-      localStorage.setItem('af-jwt', authToken);
+      updateAuthPanel();
+    }
+
+    function clearAuthToken() {
+      authToken = '';
       updateAuthPanel();
     }
 
@@ -1125,7 +1241,10 @@
       const sub = ($('token-sub')?.value || 'demo-operator').trim() || 'demo-operator';
       const role = ($('token-role')?.value || 'operator').trim();
       try {
-        const data = await request('/api/auth/token', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({sub, role, expires_minutes: 480})});
+        const bootstrap = ($('token-bootstrap')?.value || '').trim();
+        const headers = {'content-type':'application/json'};
+        if (bootstrap) headers['X-FloodOps-Bootstrap-Token'] = bootstrap;
+        const data = await request('/api/auth/token', {method:'POST', headers, body: JSON.stringify({sub, role, expires_minutes: 480})});
         setAuthToken(data.access_token);
         $('auth-status').textContent = `Token set for ${data.sub}:${data.role} (${data.token_type}) expires ${data.expires_minutes}m`;
       } catch (e) {
@@ -1134,8 +1253,7 @@
     }
 
     async function updateAuthPanel() {
-      authToken = localStorage.getItem('af-jwt') || authToken;
-      $('auth-status').textContent = authToken ? `Token present: ${authToken.slice(0,20)}…` : 'No token set, RBAC disabled = system role';
+      $('auth-status').textContent = authToken ? 'Token present in memory for this page only' : 'No token set; RBAC-disabled demo uses the internal system actor';
       try {
         const me = await request('/api/auth/me');
         $('auth-panel').innerHTML = `<div class="security-item"><span>${escapeHtml(me.sub)}<br><small>role ${escapeHtml(me.role)} is_system ${me.is_system} rbac_enabled ${me.rbac_enabled}</small></span><span class="verdict ${me.is_system?'verified':'allow'}">${escapeHtml(me.role)}</span></div>`;
@@ -1165,6 +1283,113 @@
       }
     }
 
+    // === WebEOC Responder Handoff - Approval-Gated + CAP 1.2 + SOAP AddData ===
+    async function loadWebEOCPreview() {
+      if (!currentDecision) {
+        $('webeoc-box').innerHTML = '<div class="empty">No incident ready for WebEOC export preview. Inject scenario → Approve → Preview CAP + SOAP. No agency connection is implied.</div>';
+        return;
+      }
+      $('webeoc-box').innerHTML = `<div class="empty">Loading WebEOC preview for ${currentDecision.incident_id.slice(0,8)}...<br>CAP 1.2 + SOAP AddData envelope + approval guidance</div>`;
+      try {
+        const preview = await request(`/api/decisions/${currentDecision.incident_id}/webeoc/preview`);
+        const status = preview.current_status;
+        // Approval status
+        const statusColor = status.policy_status === 'allowed' ? 'success' : status.policy_status === 'approval_required' ? 'active' : 'danger';
+        $('webeoc-approval-status').innerHTML = `
+          <b>Incident:</b> ${escapeHtml(preview.incident_id.slice(0,8))}...<br>
+          <b>Risk:</b> <span class="verdict ${status.risk_level==='catastrophic'?'danger': status.risk_level==='high'?'danger':'active'}">${escapeHtml(status.risk_level.toUpperCase())}</span>
+          Confidence ${Math.round(status.confidence*100)}% |
+          <b>Policy:</b> <span class="verdict ${statusColor}">${escapeHtml(status.policy_status)}</span><br>
+          <small>${escapeHtml(status.policy_reason||'No policy trace')} | Evidence ${status.evidence_count} Citations ${status.citations_count}</small><br>
+          <b>Approved:</b> ${status.approved ? '<span class="verdict success">YES - allowed</span>' : '<span class="verdict blocked">NO - requires approval</span>'} |
+          Already delivered WebEOC: ${status.already_delivered_webeoc ? '<span class="verdict blocked">YES</span>' : 'NO'} CAP: ${status.already_delivered_cap ? 'YES' : 'NO'}
+        `;
+
+        // Guidance should approve?
+        const guidanceColor = status.should_approve ? 'success' : 'danger';
+        $('webeoc-guidance').innerHTML = `
+          <b>Should approve?</b> <span class="verdict ${guidanceColor}">${status.should_approve ? 'YES - Approve' : 'NO - Review First'}</span><br>
+          <small>${escapeHtml(status.approval_reason)}</small><br>
+          <small style="color:var(--muted);">Guidance: consider approval only when policy is not blocked, confidence is at least 70%, and at least three grounded citations support a high or catastrophic risk finding. The deterministic policy and human reviewer remain authoritative.</small>
+        `;
+
+        // CAP XML preview
+        $('webeoc-cap-pre').textContent = preview.cap_xml;
+
+        // SOAP envelope preview
+        $('webeoc-soap-pre').textContent = preview.soap_envelope;
+
+        // Flow explanation
+        $('webeoc-flow-pre').textContent = preview.soap_explanation.flow.join('\n');
+
+        // Update box
+        $('webeoc-box').innerHTML = `
+          <div class="status-line" style="border-color:${status.approved?'#286f45':'#725c2b'}; background:${status.approved?'var(--green-dark)':'var(--amber-dark)'}; color:${status.approved?'var(--green)':'var(--amber)'}">
+            <b>WebEOC Export Preview:</b> Incident ${escapeHtml(preview.incident_id.slice(0,8))} | Risk ${escapeHtml(status.risk_level)} | Policy ${escapeHtml(status.policy_status)} | Not agency connected<br>
+            <small>${escapeHtml(preview.demo_note.slice(0,200))}...</small>
+          </div>
+          <div class="status-line" style="margin-top:8px;">
+            <b>What happens when you approve:</b> Approval changes only the local policy state. Delivery is a separate confirmed action. The backend checks approval, confirmation, idempotency, and complete organization-issued WebEOC settings before it can build CAP XML, wrap it in a SOAP AddData request, and attempt delivery. This hackathon build provides an interoperability adapter and preview; it is not connected to or authorized by an agency.
+          </div>
+        `;
+
+        // Enable/disable send button based on approval
+        const sendBtn = $('webeoc-send-button');
+        const confirmChk = $('webeoc-confirm-checkbox');
+        if (sendBtn) {
+          if (status.policy_status === 'allowed') {
+            sendBtn.disabled = !confirmChk.checked;
+            sendBtn.classList.remove('danger');
+            sendBtn.classList.add('primary');
+          } else {
+            sendBtn.disabled = true;
+            sendBtn.classList.add('danger');
+          }
+        }
+
+        // Delivery status
+        const deliveryStatus = status.already_delivered_webeoc ? 'already_delivered - idempotent second send returns this' : status.already_delivered_cap ? 'CAP already delivered' : 'not sent yet - idempotent';
+        $('webeoc-delivery-status').innerHTML = `Delivery: ${escapeHtml(deliveryStatus)} | Confirm checkbox: ${confirmChk.checked ? 'YES' : 'NO - must check after reviewing CAP'} | <b>${escapeHtml(preview.production_note.slice(0,150))}...</b>`;
+
+      } catch (e) {
+        $('webeoc-box').innerHTML = `<div class="status-line error">WebEOC preview failed: ${escapeHtml(e.message)}<br><small>Inject scenario first, then try again. Demo: shows message that would be sent in production when real integration configured.</small></div>`;
+      }
+    }
+
+    async function sendToWebEOC() {
+      if (!currentDecision) {
+        $('webeoc-delivery-status').textContent = 'No incident - inject scenario first';
+        return;
+      }
+      const confirmChk = $('webeoc-confirm-checkbox');
+      if (!confirmChk.checked) {
+        $('webeoc-delivery-status').innerHTML = '<span class="verdict blocked">Must check confirm checkbox after reviewing CAP payload (confirm=true)</span>';
+        return;
+      }
+      if (currentDecision.policy_status !== 'allowed') {
+        $('webeoc-delivery-status').innerHTML = `<span class="verdict blocked">Must approve reversible action first - current policy_status ${currentDecision.policy_status} (approval_required). Click Approve reversible action button in center panel.</span>`;
+        return;
+      }
+      $('webeoc-delivery-status').textContent = 'Attempting configured WebEOC sandbox delivery...';
+      try {
+        const result = await request(`/api/decisions/${currentDecision.incident_id}/webeoc`, {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body: JSON.stringify({confirm:true})
+        });
+        if (result.status === 'delivered') {
+          $('webeoc-delivery-status').innerHTML = `<span class="verdict success">CAP Test message delivered to the configured WebEOC endpoint - Result ${result.webeoc_result}</span>`;
+          state('successful-approval','success');
+        } else if (result.status === 'already_delivered') {
+          $('webeoc-delivery-status').innerHTML = `<span class="verdict allow">ALREADY_DELIVERED - the local delivery ledger already contains this incident and channel</span>`;
+        } else {
+          $('webeoc-delivery-status').innerHTML = `<span class="verdict blocked">${escapeHtml(result.status.toUpperCase())}: ${escapeHtml(result.detail||'Blocked - organization-issued WebEOC sandbox configuration is incomplete.')}</span><br><small>The Test preview remains available without delivery.</small>`;
+        }
+      } catch (e) {
+        $('webeoc-delivery-status').innerHTML = `<span class="verdict blocked">Send failed: ${escapeHtml(e.message)}<br><small>The Test message preview is still available. Use only organization-issued sandbox settings.</small></span>`;
+      }
+    }
+
     // Global exports for onclick HTML - Texas Edition
     window.runPrediction = runPrediction;
     window.runRouting = runRouting;
@@ -1185,9 +1410,249 @@
     window.loadTexasData = loadTexasData;
     window.exportCSV = exportCSV;
     window.exportEDXL = exportEDXL;
+    window.openCAP = openCAP;
     window.exportFOIA = exportFOIA;
     window.checkServiceWorker = checkServiceWorker;
     window.testOfflineQueue = testOfflineQueue;
+    window.loadWebEOCPreview = loadWebEOCPreview;
+    window.sendToWebEOC = sendToWebEOC;
+
+    // === AUTO-START DASHBOARD - Hackathon Spec ===
+    // Evaluation cache - loaded once on page load, never re-run on refresh per spec
+    let evaluationLoaded = false;
+
+    async function loadEvaluationOnce() {
+      if (evaluationCache || evaluationLoaded) return evaluationCache;
+      evaluationLoaded = true;
+      try {
+        $('chart-summary').textContent = 'Loading evaluation Run 1 vs Run 2... Cached result.';
+        // Try to load from API, cache result
+        const result = await request('/api/evaluation/run', {method:'POST'});
+        evaluationCache = result;
+        renderEvaluation(result);
+        return result;
+      } catch (e) {
+        $('chart-summary').textContent = 'Evaluation pending - click Run learning evaluation. ' + e.message;
+        evaluationLoaded = false;
+        return null;
+      }
+    }
+
+    // Heartbeat indicator reflects server state; it never claims LIVE before verification.
+    async function refreshHeartbeatIndicator() {
+      try {
+        const heartbeat = await request('/api/heartbeat');
+        lastHeartbeatData = heartbeat;
+        const cycles = heartbeat.cycles || heartbeat.last_cycle || 0;
+        const interval = heartbeat.interval_seconds || heartbeat.poll_seconds || 30;
+
+        const pulse = $('pulse');
+        const label = $('heartbeat-label');
+        const autoBadge = $('auto-started-badge');
+        const enabled = heartbeat.enabled === true;
+        const running = enabled && heartbeat.running === true;
+        const hasCompletedCycle = cycles > 0 && Boolean(heartbeat.last_completed_at);
+        const partial = running && hasCompletedCycle && Boolean(heartbeat.last_error);
+        const live = running && hasCompletedCycle;
+        if (pulse) {
+          pulse.classList.toggle('live', live);
+          pulse.style.background = live ? (partial ? 'var(--amber)' : 'var(--green)') : 'var(--muted)';
+          pulse.style.boxShadow = live ? `0 0 0 5px ${partial ? '#f4c95d18' : '#7cf7ad18'}` : 'none';
+          pulse.style.animation = live ? 'pulse 2s infinite' : 'none';
+        }
+        if (label) {
+          if (!enabled) label.textContent = 'PAUSED · autonomous heartbeat disabled';
+          else if (!running || !hasCompletedCycle) label.textContent = `STARTING · waiting for first ${interval}s cycle`;
+          else label.textContent = `${partial ? 'LIVE · PARTIAL' : 'LIVE'} · ${interval}s poll · Cycle ${cycles}`;
+          label.style.color = live ? (partial ? 'var(--amber)' : 'var(--green)') : 'var(--muted)';
+        }
+        if (autoBadge) {
+          autoBadge.style.display = running ? 'inline-block' : 'none';
+          autoBadge.textContent = 'AUTONOMOUS';
+          autoBadge.title = 'Server-reported heartbeat state';
+        }
+
+        // Security console auto-refresh every 10s via /api/heartbeat per spec
+        const secStatus = heartbeat.sources ? JSON.stringify(heartbeat.sources) : '';
+        const secOutcome = heartbeat.decision_outcome || 'no_new_events';
+        const secFailures = heartbeat.consecutive_failures || 0;
+        const secEl = document.getElementById('security');
+        if (secEl && heartbeat.sources) {
+          const srcEntries = Object.entries(heartbeat.sources).map(([k,v]) =>
+            `<div class="security-item"><span>${escapeHtml(k)} ${escapeHtml(v.status)}<br><small>${escapeHtml(v.error|| v.detail || (v.events + ' events'))}</small></span><span class="verdict ${v.status==='ok'?'verified': v.status==='degraded'?'degraded':'blocked'}">${escapeHtml(v.status)}</span></div>`
+          ).join('');
+          const outcomeHtml = `<div class="security-item"><span>Last cycle outcome<br><small>Decision: ${escapeHtml(secOutcome)} · Failures: ${secFailures} · Events seen: ${heartbeat.events_seen||0} new: ${heartbeat.new_events||0}</small></span><span class="verdict ${secOutcome==='degraded'?'blocked': secOutcome==='assessed'?'allow':'allow'}">${escapeHtml(secOutcome)}</span></div>`;
+          // Keep existing security items for HiddenLayer/OpenShell but update heartbeat part
+          const existing = document.getElementById('security');
+          if (existing && !existing.dataset.heartbeatInjected) {
+            existing.dataset.heartbeatInjected = 'true';
+            // Prepend heartbeat source status
+            existing.innerHTML = srcEntries + outcomeHtml + existing.innerHTML;
+          } else {
+            // Update only heartbeat related entries if already injected - simpler: rebuild secondary section
+            const secondary = document.getElementById('heartbeat-security-secondary');
+            if (secondary) {
+              secondary.innerHTML = srcEntries + outcomeHtml;
+            } else {
+              const secDiv = document.createElement('div');
+              secDiv.id = 'heartbeat-security-secondary';
+              secDiv.innerHTML = srcEntries + outcomeHtml;
+              if (existing) existing.prepend(secDiv);
+            }
+          }
+        }
+
+        // State chips based on heartbeat
+        if (secFailures > 0) state('stale-source', 'danger');
+        else state('stale-source', '');
+
+        return heartbeat;
+      } catch (e) {
+        const pulse = $('pulse');
+        const label = $('heartbeat-label');
+        if (pulse) { pulse.classList.remove('live'); pulse.style.background = 'var(--red)'; pulse.style.animation = 'none'; }
+        if (label) {
+          label.textContent = 'OFFLINE · heartbeat status unavailable';
+          label.style.color = 'var(--red)';
+        }
+        const autoBadge = $('auto-started-badge');
+        if (autoBadge) autoBadge.style.display = 'none';
+        return null;
+      }
+    }
+
+    // Event timeline auto-refresh every 10s per spec - only re-render if count changed
+    async function refreshEventTimeline() {
+      try {
+        const events = await request('/api/events');
+        if (events.length !== lastEventCount) {
+          lastEventCount = events.length;
+          renderEvents(events);
+        } else {
+          // Even if count same, check if newest event id changed (new data same count after dedup)
+          if (events.length > 0 && currentEvents.length > 0) {
+            const newestCurrent = events.slice().sort((a,b) => new Date(b.observed_at)-new Date(a.observed_at))[0];
+            const newestPrev = currentEvents.slice().sort((a,b) => new Date(b.observed_at)-new Date(a.observed_at))[0];
+            if (newestCurrent && newestPrev && newestCurrent.event_id !== newestPrev.event_id) {
+              renderEvents(events);
+            }
+          }
+        }
+        return events;
+      } catch (e) {
+        console.warn('Event timeline refresh failed', e);
+        return null;
+      }
+    }
+
+    // Incident workspace auto-refresh every 10s per spec - only re-render if latest decision changed
+    async function refreshIncidentWorkspace() {
+      try {
+        const decisions = await request('/api/decisions');
+        if (!decisions || !decisions.length) {
+          // No decisions yet - keep waiting state with countdown handled by renderEvents
+          return null;
+        }
+        const latest = decisions.slice().sort((a,b) => new Date(b.created_at)-new Date(a.created_at))[0];
+        if (latest && latest.incident_id !== lastDecisionId) {
+          lastDecisionId = latest.incident_id;
+          // Render as decision data structure expected by renderDecision
+          renderDecision({events: currentEvents, decision: latest, error: null, live: false});
+          // Enable after-action button
+          const afterBtn = document.getElementById('after-action-button');
+          if (afterBtn) afterBtn.disabled = false;
+        }
+        return decisions;
+      } catch (e) {
+        console.warn('Incident workspace refresh failed', e);
+        return null;
+      }
+    }
+
+    // Single setInterval every 10s per spec that does heartbeat, events, decisions, security
+    let autoRefreshInterval = null;
+    async function autoRefreshTick() {
+      try {
+        await Promise.all([
+          refreshHeartbeatIndicator(),
+          refreshEventTimeline(),
+          refreshIncidentWorkspace(),
+        ]);
+        // Also refresh integrations gate occasionally (health)
+        try {
+          const health = await request('/health');
+          const integEl = document.getElementById('integrations');
+          if (integEl) {
+            $('integration-title').textContent = `Integration gate (${health.integrations.length})`;
+            integEl.innerHTML = health.integrations.map(item => `<div class="integration-item"><span>${escapeHtml(item.name)}<br><small>${escapeHtml(item.detail)}</small></span><span class="verdict ${item.verified ? 'verified' : item.configured ? '' : 'degraded'}">${item.verified ? 'verified' : item.configured ? 'configured' : 'omitted'}</span></div>`).join('');
+          }
+        } catch {}
+      } catch (e) {
+        console.warn('Auto-refresh tick failed', e);
+      }
+    }
+
+    // Heartbeat polling every 5s per spec (separate from 10s tick for faster LIVE update)
+    let heartbeat5sInterval = null;
+    function startHeartbeat5sPolling() {
+      if (heartbeat5sInterval) clearInterval(heartbeat5sInterval);
+      // Immediate first call
+      refreshHeartbeatIndicator();
+      heartbeat5sInterval = setInterval(() => {
+        refreshHeartbeatIndicator();
+      }, 5000);
+    }
+
+    function startAutoRefresh10s() {
+      if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+      // Immediate first tick for 90s story
+      autoRefreshTick();
+      autoRefreshInterval = setInterval(() => {
+        autoRefreshTick();
+      }, 10000);
+    }
+
+    // WebEOC preview/send wiring + confirm checkbox
+    function setupWebEOCHandlers() {
+      const previewBtn = $('webeoc-preview-button');
+      const sendBtn = $('webeoc-send-button');
+      const confirmChk = $('webeoc-confirm-checkbox');
+      if (previewBtn) previewBtn.addEventListener('click', loadWebEOCPreview);
+      if (sendBtn) sendBtn.addEventListener('click', sendToWebEOC);
+      if (confirmChk && sendBtn) {
+        confirmChk.addEventListener('change', () => {
+          const decision = currentDecision;
+          if (decision && decision.policy_status === 'allowed') {
+            sendBtn.disabled = !confirmChk.checked;
+          }
+          // Update delivery status hint
+          const deliveryStatus = $('webeoc-delivery-status');
+          if (deliveryStatus) {
+            deliveryStatus.textContent = confirmChk.checked ? 'Confirm checked - ready to send if approved' : 'Must check confirm checkbox after reviewing CAP payload (confirm=true)';
+          }
+        });
+      }
+    }
+
+    // Override renderDecision to also refresh WebEOC preview
+    const originalRenderDecisionForWebEOC = renderDecision;
+    const originalRenderEventsForWebEOC = renderEvents;
+    // We'll re-wrap after original defined - do it here for clarity
+    function renderDecisionWithWebEOC(data) {
+      originalRenderDecisionForWebEOC(data);
+      // Auto-load WebEOC preview when new decision arrives per spec
+      if (data.decision) {
+        setTimeout(() => {
+          loadWebEOCPreview();
+          // Enable after-action
+          const afterBtn = $('after-action-button');
+          if (afterBtn) afterBtn.disabled = false;
+        }, 300);
+      }
+    }
+    // Replace original renderDecision reference for future calls
+    // Keep original function available but point new auto-refresh to use enhanced version
+    // We'll monkey-patch by assigning to window and using in refreshIncidentWorkspace which already calls renderDecision
 
     document.querySelectorAll('[data-scenario]').forEach(button => button.addEventListener('click', () => runScenario(button.dataset.scenario)));
     $('live-button').addEventListener('click', runLive);
@@ -1201,27 +1666,31 @@
     $('routing-button').addEventListener('click', runRouting);
     $('after-action-button').addEventListener('click', generateAfterAction);
 
-    refreshSystem();
-    window.setInterval(refreshSystem, 30000);
+    // Patch renderDecision to auto-load WebEOC preview when new decision arrives
+    const _origRenderDecision = renderDecision;
+    renderDecision = function(data) {
+      _origRenderDecision(data);
+      if (data && data.decision) {
+        // Auto-refresh WebEOC panel per spec for demo
+        setTimeout(() => {
+          try { loadWebEOCPreview(); } catch(e) { console.warn('WebEOC preview auto-load failed', e); }
+        }, 400);
+      }
+    };
+
+    (function initialHeartbeatState() {
+      startCountdownTimer();
+    })();
+
+    refreshSystem(); // Load initial integrations, auth, etc.
+    startHeartbeat5sPolling(); // Poll /api/heartbeat every 5s per spec
+    startAutoRefresh10s(); // Single setInterval every 10s per spec: heartbeat, events, decisions, security
+    // Evaluation is intentionally operator-triggered; page load must not mutate evaluation state.
+    setupWebEOCHandlers(); // Wire WebEOC preview/send buttons + confirm checkbox per WebEOC spec
     // Init map after load
     setTimeout(()=>{ ensureMap(); }, 500);
-  </script>
-  <!-- FALLBACK: vendor/pretext.js missing, using CDN -->
-  <script type="module">
-    import { prepare, layout } from 'https://esm.sh/@chenglou/pretext';
-    await document.fonts.ready;
-    const prepared = new Map();
-    const elements = document.querySelectorAll('[data-pretext]');
-    for (const element of elements) prepared.set(element, prepare(element.textContent, getComputedStyle(element).font));
-    function relayout() {
-      for (const [element, handle] of prepared) {
-        const lineHeight = parseFloat(getComputedStyle(element).lineHeight) || 24;
-        const result = layout(handle, element.clientWidth, lineHeight);
-        element.style.minHeight = `${result.height}px`;
-      }
-    }
-    new ResizeObserver(relayout).observe(document.body);
-    relayout();
+    // Also refresh learning panel initially
+    setTimeout(()=>{ refreshLearning(); loadResources(); loadTexasData(); checkServiceWorker(); }, 1000);
   </script>
 </body>
 </html>

@@ -45,6 +45,7 @@ def parse_usgs_observations(payload: dict[str, Any], site_id: str, parameter_cod
                 longitude=(source_info.get("geoLocation") or {}).get("geogLocation", {}).get("longitude"),
                 value=numeric_value,
                 unit=unit,
+                freshness_seconds=max(0.0, (datetime.now(timezone.utc) - observed_at).total_seconds()),
                 provenance_url=f"{USGS_IV_URL}?sites={site_id}&parameterCd={parameter_codes}",
                 raw=series,
                 mode=mode,

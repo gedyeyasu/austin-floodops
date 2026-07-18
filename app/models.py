@@ -15,7 +15,7 @@ class FloodEvent(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     event_id: str = Field(default_factory=lambda: str(uuid4()))
-    source: Literal["nws", "usgs", "austin", "replay"]
+    source: Literal["nws", "usgs", "austin", "lcra", "txdot", "austin_311", "replay"]
     observed_at: datetime
     received_at: datetime = Field(default_factory=utc_now)
     kind: str
@@ -34,12 +34,12 @@ class FloodEvent(BaseModel):
 
 class IncidentRequest(BaseModel):
     mode: Literal["live", "replay"] = "live"
-    scenario_id: str = "east-austin-night-market"
+    scenario_id: str = Field(default="east-austin-night-market", pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
 class SimulationRequest(BaseModel):
     mode: Literal["live", "replay"] = "replay"
-    scenario_id: str = "east-austin-night-market"
+    scenario_id: str = Field(default="east-austin-night-market", pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
     horizon_minutes: int = Field(default=60, ge=5, le=360)
 
 

@@ -25,9 +25,11 @@ def build_cap_alert(decision: IncidentDecision) -> bytes:
     alert = Element("alert", {"xmlns": CAP_NS})
     for name, value in (
         ("identifier", f"austin-floodops-{decision.incident_id}"),
-        ("sender", "austin-floodops"),
+        ("sender", "austin-floodops-prototype"),
         ("sent", _cap_time(decision.created_at)),
-        ("status", "Actual"),
+        # This project has not been authorized as a public-warning originator.
+        # Keep every exported or delivered message in CAP Test status.
+        ("status", "Test"),
         ("msgType", "Alert"),
         ("scope", "Restricted"),
     ):

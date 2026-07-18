@@ -95,8 +95,36 @@ async def test_heartbeat_exposes_partial_source_failure(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_quiet_heartbeat_preserves_last_verified_stream_evidence(tmp_path, monkeypatch):
+    local = replace(settings, db_path=tmp_path / "heartbeat.sqlite3", kafka_bootstrap_servers="broker:9092", supabase_url="", supabase_service_role_key="")
+    service = FloodOpsService(local, Store(local.db_path))
+    service.store.save_heartbeat_state(
+        {"stream": {"status": "verified", "published": 2, "consumed": 2, "fallback": 0}, "cycles": 1}
+    )
+
+    async def gather_live_with_status():
+        return [], {"nws": {"status": "ok", "events": 0}}
+
+    monkeypatch.setattr(service, "gather_live_with_status", gather_live_with_status)
+    state = await HeartbeatEngine(service).run_cycle()
+    assert state["stream"]["status"] == "verified"
+    assert state["stream"]["current_cycle"] == "idle"
+    assert state["stream"]["published"] == 2
+
+
+@pytest.mark.asyncio
 async def test_kafka_failure_degrades_without_losing_assessment(tmp_path, monkeypatch):
-    local = replace(settings, db_path=tmp_path / "heartbeat.sqlite3", kafka_bootstrap_servers="broker:9092", supabase_url="", supabase_service_role_key="", hiddenlayer_interactions_url="", hiddenlayer_api_key="")
+    local = replace(
+        settings,
+        db_path=tmp_path / "heartbeat.sqlite3",
+        kafka_bootstrap_servers="broker:9092",
+        supabase_url="",
+        supabase_service_role_key="",
+        hiddenlayer_interactions_url="",
+        hiddenlayer_api_key="",
+        hiddenlayer_client_id="",
+        hiddenlayer_client_secret="",
+    )
     service = FloodOpsService(local, Store(local.db_path))
 
     class BrokenBus:
@@ -112,3 +140,46 @@ async def test_kafka_failure_degrades_without_losing_assessment(tmp_path, monkey
     assert assessed is not None
     assert assessed.raw_model_response["security"]["kafka"]["status"] == "degraded"
     assert service.store.list_events()[0].event_id == "stable-heartbeat-event"
+
+
+@pytest.mark.asyncio
+async def test_kafka_round_trip_is_the_assessment_path(tmp_path, monkeypatch):
+    local = replace(
+        settings,
+        db_path=tmp_path / "heartbeat.sqlite3",
+        kafka_bootstrap_servers="broker:9092",
+        supabase_url="",
+        supabase_service_role_key="",
+        hiddenlayer_interactions_url="",
+        hiddenlayer_api_key="",
+        hiddenlayer_client_id="",
+        hiddenlayer_client_secret="",
+    )
+    service = FloodOpsService(local, Store(local.db_path))
+    published: list[FloodEvent] = []
+    assessed_ids: list[str] = []
+
+    class LoopbackBus:
+        def publish(self, events):
+            published.extend(events)
+            return len(events)
+
+        def consume(self, **kwargs):
+            yield from published
+
+    async def assessor(events, scenario_id, memories):
+        assessed_ids.extend(item.event_id for item in events)
+        return decision()
+
+    monkeypatch.setattr(service, "event_bus", lambda: LoopbackBus())
+    _, assessed, error = await service.assess_events([event()], "heartbeat", model_assessor=assessor)
+    assert error is None
+    assert assessed is not None
+    assert assessed_ids == ["stable-heartbeat-event"]
+    assert assessed.raw_model_response["security"]["kafka"] == {
+        "status": "verified",
+        "published": 1,
+        "consumed": 1,
+        "fallback": 0,
+        "event_ids": ["stable-heartbeat-event"],
+    }

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "austin-floodops"
-version = "0.2.0"
-description = "Approval-gated live flood-response coordination using official public data and Nemotron."
+version = "0.3.0"
+description = "Approval-gated flood decision support with live public evidence, Nemotron, HiddenLayer, and Kafka-compatible streaming."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115,<1",

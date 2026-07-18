@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 from app.models import FloodEvent
+from app.sources.austin import fetch_austin_crossings, fetch_austin_road_closures
+from app.sources.lcra import fetch_lcra_stages
 from app.sources.nws import fetch_nws_alerts
+from app.sources.txdot import fetch_austin_311, fetch_txdot_closures
 from app.sources.usgs import fetch_usgs_observations
 
 
@@ -22,34 +25,6 @@ async def collect_live(*, user_agent: str, site_id: str, parameter_codes: str) -
 async def collect_live_with_status(
     *, user_agent: str, site_id: str, parameter_codes: str
 ) -> tuple[list[FloodEvent], dict[str, dict[str, Any]]]:
-    # Lazy import Austin + Texas sources to avoid hard fails
-    try:
-        from app.sources.austin import fetch_austin_crossings, fetch_austin_road_closures
-    except Exception:
-
-        async def fetch_austin_crossings(limit=50):  # type: ignore
-            return []
-
-        async def fetch_austin_road_closures(limit=50):  # type: ignore
-            return []
-
-    try:
-        from app.sources.lcra import fetch_lcra_stages
-    except Exception:
-
-        async def fetch_lcra_stages(limit=20, mode="live"):  # type: ignore
-            return []
-
-    try:
-        from app.sources.txdot import fetch_txdot_closures, fetch_austin_311
-    except Exception:
-
-        async def fetch_txdot_closures(limit=30, mode="live"):  # type: ignore
-            return []
-
-        async def fetch_austin_311(limit=20, mode="live"):  # type: ignore
-            return []
-
     nws_task = fetch_nws_alerts(user_agent=user_agent)
     usgs_task = fetch_usgs_observations(site_id=site_id, parameter_codes=parameter_codes)
     austin_crossings_task = fetch_austin_crossings(limit=50)
