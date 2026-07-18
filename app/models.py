@@ -37,6 +37,33 @@ class IncidentRequest(BaseModel):
     scenario_id: str = "east-austin-night-market"
 
 
+class SimulationRequest(BaseModel):
+    mode: Literal["live", "replay"] = "replay"
+    scenario_id: str = "east-austin-night-market"
+    horizon_minutes: int = Field(default=60, ge=5, le=360)
+
+
+class ImpactEstimate(BaseModel):
+    scenario_id: str
+    generated_at: datetime = Field(default_factory=utc_now)
+    mode: Literal["live", "replay"]
+    horizon_minutes: int
+    risk_level: Literal["low", "moderate", "high", "catastrophic", "unknown"]
+    severity_score: float = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
+    estimated_depth_m: float = Field(ge=0)
+    exposed_people: int = Field(ge=0)
+    route_delay_minutes: int = Field(ge=0)
+    blocked_crossings: list[str]
+    evidence_event_ids: list[str]
+    assumptions: list[str]
+    model_version: str
+
+
+class FirstResponderDispatchRequest(BaseModel):
+    confirm: bool = False
+
+
 class ProposedAction(BaseModel):
     action_type: Literal["close_crossing_and_reroute", "request_approval", "quarantine"]
     target: str

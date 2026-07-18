@@ -48,6 +48,13 @@ class Store:
                     active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+                CREATE TABLE IF NOT EXISTS deliveries (
+                    incident_id TEXT NOT NULL,
+                    channel TEXT NOT NULL,
+                    delivered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    response_status INTEGER NOT NULL,
+                    PRIMARY KEY (incident_id, channel)
+                );
                 """
             )
 
@@ -97,3 +104,17 @@ class Store:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def delivery_exists(self, incident_id: str, channel: str) -> bool:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT 1 FROM deliveries WHERE incident_id = ? AND channel = ?",
+                (incident_id, channel),
+            ).fetchone()
+        return row is not None
+
+    def record_delivery(self, incident_id: str, channel: str, response_status: int) -> None:
+        with self._connect() as db:
+            db.execute(
+                "INSERT OR IGNORE INTO deliveries(incident_id, channel, response_status) VALUES (?, ?, ?)",
+                (incident_id, channel, response_status),
+            )

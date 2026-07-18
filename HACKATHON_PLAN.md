@@ -6,6 +6,20 @@
 The current branch has a real optional Kafka producer/consumer in `app/streaming/kafka.py`, an HTTP probe at `/api/integrations/kafka/probe`, and an OpenShell policy artifact at `openshell/austin-floodops.yaml`. Broker errors are converted to a typed degraded state; no broker or sandbox claim is considered verified until the smoke probe fires against the configured service.
 
 Status: GSTACK DEBATE VERDICT — NARROW BEFORE BUILD
+
+## Implementation checkpoint: simulation and responder boundary
+
+The current branch also has a real deterministic `threshold-v1` impact model at
+`POST /api/simulate`. It returns severity, screening depth/exposure, route
+delay, evidence IDs, and explicit assumptions for live or replay events. This
+is decision support, not hydraulic forecasting. Approved decisions can be
+exported as CAP 1.2 XML locally; a generic responder webhook sender is
+configured separately, requires `confirm=true` plus an `allowed` policy status,
+and uses a durable idempotency key. HiddenLayer is a fail-closed adapter whose
+tenant-specific Interactions URL must be supplied; it is not represented as
+verified while unconfigured. The OpenShell artifact now uses the current
+policy-v1 sections (`filesystem_policy`, `landlock`, `process`, and
+`network_policies`) and leaves inference credentials provider-managed.
 Hackathon: AITX Community x NVIDIA Claw Agent Hackathon, July 17-19, 2026
 Primary track: Red Hat Live Data
 Secondary qualification targets: Recursive Intelligence, HiddenLayer Runtime Security, Best Use of vLLM, Best Use of NemoClaw + OpenShell, Best Use of Nemotron, Most Commercializable Hack

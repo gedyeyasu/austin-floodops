@@ -7,7 +7,9 @@ from app.config import Settings
 from app.learning.memory import retrieval_context
 from app.model.nemotron import IntegrationUnavailable, assess_incident
 from app.models import FloodEvent, IncidentDecision, OperatorFeedback
+from app.security.hiddenlayer import HiddenLayerConfig, HiddenLayerUnavailable, scan_interaction
 from app.safety.policy import PolicyResult, evaluate
+from app.simulation.model import simulate_impact
 from app.storage.sqlite import Store
 from app.streaming.ingest import collect_live, replay
 from app.streaming.kafka import EventBus, KafkaConfig, KafkaUnavailable
@@ -32,6 +34,13 @@ class FloodOpsService:
                 username=self.settings.kafka_username,
                 password=self.settings.kafka_password,
             )
+        )
+
+    def hiddenlayer(self) -> HiddenLayerConfig:
+        return HiddenLayerConfig(
+            interactions_url=self.settings.hiddenlayer_interactions_url,
+            api_key=self.settings.hiddenlayer_api_key,
+            project=self.settings.hiddenlayer_project,
         )
 
     async def gather(self, mode: str, scenario_id: str) -> list[FloodEvent]:
@@ -67,6 +76,16 @@ class FloodOpsService:
             )
         except IntegrationUnavailable as exc:
             return events, None, str(exc)
+        if self.settings.has_hiddenlayer:
+            try:
+                scan = await scan_interaction(
+                    self.hiddenlayer(),
+                    input_text="\n".join(f"{event.event_id}: {event.title}" for event in events),
+                    output_text=f"{decision.summary}\n{decision.proposed_action.rationale}",
+                )
+                decision.raw_model_response["hiddenlayer"] = scan
+            except HiddenLayerUnavailable as exc:
+                return events, None, str(exc)
         decision.raw_model_response.setdefault("memory_context", retrieval_context(self.store))
         decision.policy_status = evaluate(decision).status  # type: ignore[misc]
         self.store.save_decision(decision)
@@ -80,3 +99,6 @@ class FloodOpsService:
 
     def feedback(self, incident_id: str, feedback: OperatorFeedback) -> int:
         return self.store.add_feedback(incident_id, feedback)
+
+    def simulate(self, events: list[FloodEvent], *, mode: str, scenario_id: str, horizon_minutes: int):
+        return simulate_impact(events, mode=mode, scenario_id=scenario_id, horizon_minutes=horizon_minutes)

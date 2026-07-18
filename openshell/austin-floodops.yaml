@@ -1,32 +1,42 @@
-apiVersion: openshell.nvidia.com/v1
-kind: SandboxPolicy
-metadata:
-  name: austin-floodops
-spec:
-  # Keep model inference and public evidence access narrow. Tool execution is
-  # approval-gated by the application and never receives arbitrary credentials.
-  network:
-    allowed_hosts:
-      - integrate.api.nvidia.com
-      - api.weather.gov
-      - waterservices.usgs.gov
-    default: deny
-  filesystem:
-    read_only_paths:
-      - /app/data/replay
-    writable_paths:
-      - /app/data
-  credentials:
-    allow:
-      - NVIDIA_INFERENCE_API_KEY
-    deny:
-      - AWS_ACCESS_KEY_ID
-      - AWS_SECRET_ACCESS_KEY
-      - GITHUB_TOKEN
-  actions:
-    default: deny
-    allowed:
-      - name: propose_reversible_reroute
-        requires_operator_approval: true
-        reversible: true
+# OpenShell policy v1. Create with:
+#   openshell sandbox create --policy ./openshell/austin-floodops.yaml -- \
+#     python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8080
+#
+# NemoClaw model traffic should use an OpenShell provider/inference route;
+# this policy does not grant the sandbox a raw provider credential.
+version: 1
 
+filesystem_policy:
+  read_only:
+    - /app/data/replay
+  read_write:
+    - /app/data
+    - /tmp
+
+landlock:
+  compatibility: best_effort
+
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+
+network_policies:
+  public-evidence:
+    name: public-evidence
+    endpoints:
+      - host: api.weather.gov
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-only
+      - host: waterservices.usgs.gov
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-only
+    binaries:
+      - /usr/local/bin/python3
+      - /usr/bin/python3
+
+# Add a tenant-specific HiddenLayer Interactions endpoint only after its URL
+# and API contract are supplied. Keep it separate from inference routing.

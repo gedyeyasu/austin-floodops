@@ -3,10 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.config import settings
-from app.models import HealthResponse, IncidentRequest, OperatorFeedback
+from app.models import FirstResponderDispatchRequest, HealthResponse, IncidentRequest, OperatorFeedback, SimulationRequest
+from app.responders.cap import ResponderUnavailable, build_cap_alert, send_cap
+from app.security.hiddenlayer import HiddenLayerUnavailable, scan_interaction
 from app.service import FloodOpsService
 from app.streaming.kafka import KafkaUnavailable
 
@@ -28,6 +30,9 @@ async def health() -> HealthResponse:
         {"name": "NVIDIA Nemotron", "configured": settings.has_nvidia_key, "verified": False, "detail": settings.nvidia_base_url},
         {"name": "Red Hat Streams/Kafka", "configured": settings.has_kafka, "verified": False, "detail": "Optional event-bus adapter"},
         {"name": "Supabase", "configured": settings.has_supabase, "verified": False, "detail": "SQLite local durable fallback is active"},
+        {"name": "NemoClaw/OpenShell", "configured": settings.has_openshell, "verified": False, "detail": "Set OPENSHELL_GATEWAY after selecting a gateway"},
+        {"name": "HiddenLayer runtime", "configured": settings.has_hiddenlayer, "verified": False, "detail": "Tenant-supplied Interactions API endpoint"},
+        {"name": "First-responder CAP webhook", "configured": settings.has_first_responder, "verified": False, "detail": "Approval-gated generic CAP 1.2 sender"},
     ]
     status = "ok" if settings.has_nvidia_key else "degraded"
     return HealthResponse(status=status, mode=settings.data_mode, integrations=integrations)
@@ -37,6 +42,15 @@ async def health() -> HealthResponse:
 async def assess(request: IncidentRequest) -> dict:
     events, decision, error = await service.assess(request.mode, request.scenario_id)
     return {"events": events, "decision": decision, "error": error, "live": request.mode == "live" and not error}
+
+
+@app.post("/api/simulate")
+async def simulate(request: SimulationRequest) -> dict:
+    events = await service.gather(request.mode, request.scenario_id)
+    if events:
+        service.store.save_events(events)
+    estimate = service.simulate(events, mode=request.mode, scenario_id=request.scenario_id, horizon_minutes=request.horizon_minutes)
+    return {"events": events, "estimate": estimate}
 
 
 @app.get("/api/events")
@@ -62,6 +76,19 @@ async def kafka_probe() -> dict:
         return {"status": "blocked", "detail": str(exc)}
 
 
+@app.post("/api/integrations/hiddenlayer/probe")
+async def hiddenlayer_probe() -> dict:
+    if not settings.has_hiddenlayer:
+        return {"status": "unconfigured", "detail": "Set HIDDENLAYER_INTERACTIONS_URL and HIDDENLAYER_API_KEY."}
+    try:
+        result = await scan_interaction(
+            service.hiddenlayer(), input_text="Austin FloodOps integration probe", output_text="allow"
+        )
+        return {"status": "verified", "result": result}
+    except HiddenLayerUnavailable as exc:
+        return {"status": "blocked", "detail": str(exc)}
+
+
 @app.post("/api/decisions/{incident_id}/approve")
 async def approve(incident_id: str) -> dict:
     decision = next((item for item in service.store.list_decisions() if item.incident_id == incident_id), None)
@@ -69,6 +96,39 @@ async def approve(incident_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Incident not found")
     result = service.approve(decision)
     return {"incident_id": incident_id, "status": result.status, "reason": result.reason}
+
+
+@app.get("/api/decisions/{incident_id}/cap")
+async def cap_export(incident_id: str) -> Response:
+    decision = next((item for item in service.store.list_decisions() if item.incident_id == incident_id), None)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return Response(content=build_cap_alert(decision), media_type="application/cap+xml")
+
+
+@app.post("/api/decisions/{incident_id}/first-responder")
+async def first_responder(incident_id: str, payload: FirstResponderDispatchRequest) -> dict:
+    decision = next((item for item in service.store.list_decisions() if item.incident_id == incident_id), None)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    if not payload.confirm:
+        return {"status": "blocked", "detail": "Set confirm=true after reviewing the CAP payload."}
+    if decision.policy_status != "allowed":
+        return {"status": "blocked", "detail": "Approve the reversible action before sending a responder message."}
+    channel = "first-responder-cap"
+    if service.store.delivery_exists(incident_id, channel):
+        return {"status": "already_delivered", "incident_id": incident_id}
+    try:
+        status = await send_cap(
+            url=settings.first_responder_webhook_url,
+            token=settings.first_responder_webhook_token,
+            incident_id=incident_id,
+            payload=build_cap_alert(decision),
+        )
+    except ResponderUnavailable as exc:
+        return {"status": "blocked", "detail": str(exc)}
+    service.store.record_delivery(incident_id, channel, status)
+    return {"status": "delivered", "incident_id": incident_id, "response_status": status}
 
 
 @app.post("/api/decisions/{incident_id}/feedback")

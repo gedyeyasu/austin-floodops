@@ -4,6 +4,8 @@ import pytest
 
 from app.model.nemotron import IntegrationUnavailable, _extract_json
 from app.models import FloodEvent, IncidentDecision, ProposedAction
+from app.responders.cap import build_cap_alert
+from app.simulation.model import simulate_impact
 from app.safety.policy import evaluate
 from app.storage.sqlite import Store
 
@@ -66,3 +68,31 @@ def test_store_is_idempotent_and_versions_feedback(tmp_path):
     store.add_feedback(assessed.incident_id, __import__("app.models", fromlist=["OperatorFeedback"]).OperatorFeedback(correction="Require a second gage before closure.", outcome="helpful"))
     assert store.active_memories()[0]["rule"].startswith("Require a second")
 
+
+def test_replay_simulation_exposes_assumptions_and_high_risk():
+    events = [
+        event("warning"),
+        FloodEvent(
+            event_id="gage",
+            source="replay",
+            observed_at=datetime.now(timezone.utc),
+            kind="water_observation",
+            title="Gage height",
+            value=12.4,
+            unit="ft",
+            provenance_url="https://example.test/gage",
+            mode="replay",
+        ),
+    ]
+    events[0].title = "Flash Flood Warning"
+    estimate = simulate_impact(events, mode="replay", scenario_id="test", horizon_minutes=60)
+    assert estimate.risk_level == "catastrophic"
+    assert estimate.evidence_event_ids == ["warning", "gage"]
+    assert estimate.assumptions
+
+
+def test_cap_export_is_xml_and_contains_incident_id():
+    assessed = decision()
+    payload = build_cap_alert(assessed)
+    assert payload.startswith(b"<?xml")
+    assert assessed.incident_id.encode() in payload

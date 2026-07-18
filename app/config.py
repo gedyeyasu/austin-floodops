@@ -34,6 +34,12 @@ class Settings:
     kafka_password: str = os.getenv("KAFKA_PASSWORD", "")
     supabase_url: str = os.getenv("SUPABASE_URL", "").rstrip("/")
     supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    hiddenlayer_interactions_url: str = os.getenv("HIDDENLAYER_INTERACTIONS_URL", "")
+    hiddenlayer_api_key: str = os.getenv("HIDDENLAYER_API_KEY", "")
+    hiddenlayer_project: str = os.getenv("HIDDENLAYER_PROJECT", "austin-floodops")
+    first_responder_webhook_url: str = os.getenv("FIRST_RESPONDER_WEBHOOK_URL", "")
+    first_responder_webhook_token: str = os.getenv("FIRST_RESPONDER_WEBHOOK_TOKEN", "")
+    openshell_gateway: str = os.getenv("OPENSHELL_GATEWAY", "")
 
     @property
     def has_nvidia_key(self) -> bool:
@@ -50,6 +56,18 @@ class Settings:
     @property
     def has_supabase(self) -> bool:
         return bool(self.supabase_url and self.supabase_service_role_key)
+
+    @property
+    def has_hiddenlayer(self) -> bool:
+        return bool(self.hiddenlayer_interactions_url and self.hiddenlayer_api_key)
+
+    @property
+    def has_first_responder(self) -> bool:
+        return bool(self.first_responder_webhook_url and self.first_responder_webhook_token)
+
+    @property
+    def has_openshell(self) -> bool:
+        return bool(self.openshell_gateway)
 
 
 settings = Settings()
