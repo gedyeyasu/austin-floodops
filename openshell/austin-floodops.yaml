@@ -1,0 +1,32 @@
+apiVersion: openshell.nvidia.com/v1
+kind: SandboxPolicy
+metadata:
+  name: austin-floodops
+spec:
+  # Keep model inference and public evidence access narrow. Tool execution is
+  # approval-gated by the application and never receives arbitrary credentials.
+  network:
+    allowed_hosts:
+      - integrate.api.nvidia.com
+      - api.weather.gov
+      - waterservices.usgs.gov
+    default: deny
+  filesystem:
+    read_only_paths:
+      - /app/data/replay
+    writable_paths:
+      - /app/data
+  credentials:
+    allow:
+      - NVIDIA_INFERENCE_API_KEY
+    deny:
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - GITHUB_TOKEN
+  actions:
+    default: deny
+    allowed:
+      - name: propose_reversible_reroute
+        requires_operator_approval: true
+        reversible: true
+

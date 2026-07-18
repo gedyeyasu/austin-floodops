@@ -7,6 +7,8 @@ The current vertical slice is real-data-first:
 - `DATA_MODE=live` calls the public NWS and USGS APIs and will not fabricate evidence.
 - Nemotron uses NVIDIA's OpenAI-compatible hosted endpoint. If no key is configured, the assessment is explicitly blocked.
 - SQLite stores event, decision, and versioned operator-feedback records locally; Supabase is an optional persistence adapter in the plan.
+- `app/streaming/kafka.py` is the real Red Hat Streams/Kafka producer/consumer path. Configure the broker and call `POST /api/integrations/kafka/probe` to verify a publish/consume round trip.
+- `openshell/austin-floodops.yaml` is the restrictive sandbox policy artifact: public evidence and NVIDIA inference are allowlisted, credentials are narrowed, and actions default to deny.
 - `DATA_MODE=replay` uses the checked-in East Austin scenario only for repeatable tests and demos. Replay is always labeled replay.
 
 ## Run locally
@@ -36,4 +38,3 @@ The replay still requires a real NVIDIA key for an assessment. Without one, the 
 ## Project plan
 
 See [HACKATHON_PLAN.md](HACKATHON_PLAN.md) for the gstack decision record, track fit, integration gates, and the remaining sponsor adapters.
-

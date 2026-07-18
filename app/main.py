@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.models import HealthResponse, IncidentRequest, OperatorFeedback
 from app.service import FloodOpsService
+from app.streaming.kafka import KafkaUnavailable
 
 
 app = FastAPI(title="Austin FloodOps", version="0.1.0")
@@ -48,6 +49,19 @@ async def decisions() -> list[dict]:
     return [decision.model_dump(mode="json") for decision in service.store.list_decisions()]
 
 
+@app.post("/api/integrations/kafka/probe")
+async def kafka_probe() -> dict:
+    if not settings.has_kafka:
+        return {"status": "unconfigured", "detail": "Set KAFKA_BOOTSTRAP_SERVERS before running the producer/consumer probe."}
+    try:
+        events = service.store.list_events(limit=1)
+        published = service.event_bus().publish(events) if events else 0
+        consumed = list(service.event_bus().consume(max_records=max(1, published))) if published else []
+        return {"status": "verified", "published": published, "consumed": len(consumed), "event_ids": [item.event_id for item in consumed]}
+    except KafkaUnavailable as exc:
+        return {"status": "blocked", "detail": str(exc)}
+
+
 @app.post("/api/decisions/{incident_id}/approve")
 async def approve(incident_id: str) -> dict:
     decision = next((item for item in service.store.list_decisions() if item.incident_id == incident_id), None)
@@ -64,4 +78,3 @@ async def feedback(incident_id: str, payload: OperatorFeedback) -> dict:
         raise HTTPException(status_code=404, detail="Incident not found")
     feedback_id = service.feedback(incident_id, payload)
     return {"feedback_id": feedback_id, "memory": payload.correction}
-

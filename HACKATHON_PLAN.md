@@ -1,6 +1,10 @@
 <!-- /autoplan restore point: /Users/gedeoneyasu/.gstack/projects/RedHatHackthon/master-autoplan-restore-20260717-182513.md -->
 # ClawOps: Self-Improving Live Incident Commander
 
+## Implementation checkpoint: Kafka/OpenShell slice
+
+The current branch has a real optional Kafka producer/consumer in `app/streaming/kafka.py`, an HTTP probe at `/api/integrations/kafka/probe`, and an OpenShell policy artifact at `openshell/austin-floodops.yaml`. Broker errors are converted to a typed degraded state; no broker or sandbox claim is considered verified until the smoke probe fires against the configured service.
+
 Status: GSTACK DEBATE VERDICT — NARROW BEFORE BUILD
 Hackathon: AITX Community x NVIDIA Claw Agent Hackathon, July 17-19, 2026
 Primary track: Red Hat Live Data

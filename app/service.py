@@ -10,6 +10,7 @@ from app.models import FloodEvent, IncidentDecision, OperatorFeedback
 from app.safety.policy import PolicyResult, evaluate
 from app.storage.sqlite import Store
 from app.streaming.ingest import collect_live, replay
+from app.streaming.kafka import EventBus, KafkaConfig, KafkaUnavailable
 
 
 @dataclass
@@ -21,6 +22,18 @@ class FloodOpsService:
     def create(cls, settings: Settings) -> "FloodOpsService":
         return cls(settings=settings, store=Store(settings.db_path))
 
+    def event_bus(self) -> EventBus:
+        return EventBus(
+            KafkaConfig(
+                bootstrap_servers=self.settings.kafka_bootstrap_servers,
+                topic=self.settings.kafka_topic,
+                security_protocol=self.settings.kafka_security_protocol,
+                sasl_mechanism=self.settings.kafka_sasl_mechanism,
+                username=self.settings.kafka_username,
+                password=self.settings.kafka_password,
+            )
+        )
+
     async def gather(self, mode: str, scenario_id: str) -> list[FloodEvent]:
         if mode == "replay":
             path = Path(__file__).resolve().parents[1] / "data" / "replay" / f"{scenario_id}.jsonl"
@@ -30,6 +43,12 @@ class FloodOpsService:
             site_id=self.settings.usgs_site_id,
             parameter_codes=self.settings.usgs_parameter_codes,
         )
+        if events and self.settings.has_kafka:
+            try:
+                self.event_bus().publish(events)
+            except KafkaUnavailable:
+                # The local evidence ledger remains authoritative when the optional broker is down.
+                pass
         return events
 
     async def assess(self, mode: str, scenario_id: str) -> tuple[list[FloodEvent], IncidentDecision | None, str | None]:
@@ -61,4 +80,3 @@ class FloodOpsService:
 
     def feedback(self, incident_id: str, feedback: OperatorFeedback) -> int:
         return self.store.add_feedback(incident_id, feedback)
-
