@@ -1,0 +1,364 @@
+
+  Sandbox-scoped status for 'austin-floodops':
+  Sandbox: austin-floodops
+    Model:    nvidia/nemotron-3-super-120b-a12b
+    Provider: nvidia-prod
+    Inference: healthy (https://inference.local/v1/models)
+    Inference (upstream): healthy (https://integrate.api.nvidia.com/v1/models)
+    Host GPU: no
+    Sandbox GPU: disabled (auto)
+    OpenShell: 0.0.72 (docker)
+    Policies: npm, pypi, huggingface, brew, openclaw-pricing
+    Harness:  OpenClaw (gateway)
+    Connected: no
+    Permissions: not configured (default mutable state)
+    Agent:    OpenClaw v2026.6.10
+
+[1m[36mSandbox:[39m[0m
+
+  [2mId:[0m 6f196e65-246b-4446-99ba-1420647bd4c9
+  [2mName:[0m austin-floodops
+  [2mPhase:[0m Ready
+  [2mResource version:[0m 45
+  [2mPolicy source:[0m sandbox
+  [2mRevision:[0m 8
+
+[1m[36mPolicy:[39m[0m
+
+  version: 1
+  filesystem_policy:
+    include_workdir: true
+    read_only:
+    - /usr
+    - /lib
+    - /proc
+    - /dev/urandom
+    - /app
+    - /etc
+    - /var/log
+    read_write:
+    - /tmp
+    - /dev/null
+    - /dev/pts
+    - /sandbox/.openclaw
+    - /sandbox/.nemoclaw
+    - /home/linuxbrew
+    - /sandbox
+  landlock:
+    compatibility: best_effort
+  process:
+    run_as_user: sandbox
+    run_as_group: sandbox
+  network_policies:
+    allow_api_weather_gov_443:
+      name: allow_api_weather_gov_443
+      endpoints:
+      - host: api.weather.gov
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: '**'
+        - allow:
+            method: HEAD
+            path: '**'
+        - allow:
+            method: OPTIONS
+            path: '**'
+        - allow:
+            method: GET
+            path: /alerts/**
+      binaries:
+      - path: /usr/local/bin/python3
+      - path: /usr/bin/python3
+      - path: python3
+    allow_data_austintexas_gov_443:
+      name: allow_data_austintexas_gov_443
+      endpoints:
+      - host: data.austintexas.gov
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-only
+    allow_waterservices_usgs_gov_443:
+      name: allow_waterservices_usgs_gov_443
+      endpoints:
+      - host: waterservices.usgs.gov
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-only
+    brew:
+      name: brew
+      endpoints:
+      - host: formulae.brew.sh
+        port: 443
+        tls: skip
+        access: full
+      - host: github.com
+        port: 443
+        tls: skip
+        access: full
+      - host: ghcr.io
+        port: 443
+        tls: skip
+        access: full
+      - host: pkg-containers.githubusercontent.com
+        port: 443
+        tls: skip
+        access: full
+      - host: objects.githubusercontent.com
+        port: 443
+        tls: skip
+        access: full
+      - host: raw.githubusercontent.com
+        port: 443
+        tls: skip
+        access: full
+      binaries:
+      - path: /usr/bin/curl
+      - path: /usr/local/bin/brew
+      - path: /home/linuxbrew/.linuxbrew/bin/brew
+      - path: /home/linuxbrew/.linuxbrew/bin/*
+      - path: /home/linuxbrew/.linuxbrew/Homebrew/bin/*
+    clawhub:
+      name: clawhub
+      endpoints:
+      - host: clawhub.ai
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /**
+        - allow:
+            method: POST
+            path: /**
+        allow_encoded_slash: true
+      binaries:
+      - path: /usr/local/bin/openclaw
+      - path: /usr/local/bin/node
+    huggingface:
+      name: huggingface
+      endpoints:
+      - host: huggingface.co
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /**
+      - host: cdn-lfs.huggingface.co
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /**
+      - host: router.huggingface.co
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /**
+        - allow:
+            method: POST
+            path: /**
+      binaries:
+      - path: /usr/local/bin/python3
+      - path: /usr/local/bin/node
+    managed_inference:
+      name: managed_inference
+      endpoints:
+      - host: inference.local
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /**
+        - allow:
+            method: POST
+            path: /**
+      binaries:
+      - path: /usr/local/bin/openclaw
+      - path: /usr/local/bin/node
+      - path: /usr/bin/node
+      - path: /usr/bin/curl
+      - path: /usr/bin/python3
+    npm_registry:
+      name: npm_registry
+      endpoints:
+      - host: registry.npmjs.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /**
+      binaries:
+      - path: /usr/local/bin/openclaw
+    npm_yarn:
+      name: npm_yarn
+      endpoints:
+      - host: registry.npmjs.org
+        port: 443
+        tls: skip
+        access: full
+      - host: registry.yarnpkg.com
+        port: 443
+        tls: skip
+        access: full
+      binaries:
+      - path: /usr/local/bin/npm*
+      - path: /usr/local/bin/npx*
+      - path: /usr/local/bin/node*
+      - path: /usr/local/bin/yarn*
+      - path: /usr/bin/npm*
+      - path: /usr/bin/node*
+    nvidia:
+      name: nvidia
+      endpoints:
+      - host: integrate.api.nvidia.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: POST
+            path: /v1/chat/completions
+        - allow:
+            method: POST
+            path: /v1/completions
+        - allow:
+            method: POST
+            path: /v1/embeddings
+        - allow:
+            method: GET
+            path: /v1/models
+        - allow:
+            method: GET
+            path: /v1/models/**
+      binaries:
+      - path: /usr/local/bin/openclaw
+    openclaw-pricing:
+      name: openclaw-pricing
+      endpoints:
+      - host: raw.githubusercontent.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /BerriAI/litellm/main/model_prices_and_context_window.json
+      - host: openrouter.ai
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /api/v1/models
+      binaries:
+      - path: /usr/local/bin/node
+      - path: /usr/bin/node
+    openclaw_api:
+      name: openclaw_api
+      endpoints:
+      - host: openclaw.ai
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /**
+        - allow:
+            method: POST
+            path: /**
+      binaries:
+      - path: /usr/local/bin/openclaw
+      - path: /usr/local/bin/node
+    openclaw_docs:
+      name: openclaw_docs
+      endpoints:
+      - host: docs.openclaw.ai
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /**
+      binaries:
+      - path: /usr/local/bin/openclaw
+    openclaw_gateway_dialback:
+      name: openclaw_gateway_dialback
+      endpoints:
+      - host: '10.200.0.2'
+        port: 18789
+        tls: skip
+        access: full
+        allowed_ips:
+        - '10.200.0.2'
+      - host: '10.200.0.2'
+        port: 18790
+        tls: skip
+        access: full
+        allowed_ips:
+        - '10.200.0.2'
+      binaries:
+      - path: /usr/local/bin/openclaw
+      - path: /usr/local/bin/node
+      - path: /usr/bin/node
+    pypi:
+      name: pypi
+      endpoints:
+      - host: pypi.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /**
+        - allow:
+            method: HEAD
+            path: /**
+      - host: files.pythonhosted.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+        - allow:
+            method: GET
+            path: /**
+        - allow:
+            method: HEAD
+            path: /**
+      binaries:
+      - path: /usr/bin/curl
+      - path: /usr/bin/python3*
+      - path: /usr/bin/pip*
+      - path: /usr/local/bin/curl
+      - path: /usr/local/bin/python3*
+      - path: /usr/local/bin/pip*
+      - path: /usr/local/bin/uv
+      - path: /sandbox/.venv/bin/python*
+      - path: /sandbox/.venv/bin/pip*
+      - path: /sandbox/.uv/python/**/python*
+      - path: /sandbox/.local/bin/pip*
+
+    OpenClaw: running
+    Docker health: healthy
+

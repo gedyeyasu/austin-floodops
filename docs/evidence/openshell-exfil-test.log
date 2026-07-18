@@ -1,0 +1,2 @@
+api.weather.gov ALLOWED
+evil.example.com BLOCKED as expected: <urlopen error Tunnel connection failed: 403 Forbidden>
