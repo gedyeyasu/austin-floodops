@@ -57,19 +57,7 @@
     .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
     .pulse.live { background: var(--green); box-shadow: 0 0 0 5px #7cf7ad18; animation: pulse 2s infinite; }
     @keyframes pulse { 50% { box-shadow: 0 0 0 8px #7cf7ad00; } }
-    .state-strip { height: 47px; display: flex; align-items: center; gap: 7px; padding: 0 22px; border-bottom: 1px solid var(--line); overflow: hidden; background: var(--surface); position: relative; }
-    .state-strip::after {
-      content: "⭐ THE GREAT STATE OF TEXAS • BUILT FOR TEXAS • TDEM • LCRA • TXDOT • AUSTIN EOC • FOIA 7YR RETENTION • LONE STAR STATE ⭐";
-      position: absolute;
-      right: 22px;
-      top: 50%;
-      transform: translateY(-50%);
-      font: 600 0.6rem var(--mono);
-      color: var(--green);
-      letter-spacing: 0.08em;
-      opacity: 0.7;
-      white-space: nowrap;
-    }
+    .state-strip { height: 47px; display: flex; align-items: center; gap: 7px; padding: 0 22px; border-bottom: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; background: var(--surface); }
     .texas-banner {
       background: linear-gradient(90deg, #002868 0%, #002868 33%, white 33%, white 66%, #BF0A30 66%, #BF0A30 100%);
       height: 4px;
