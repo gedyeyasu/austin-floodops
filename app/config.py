@@ -25,7 +25,7 @@ class Settings:
     nvidia_api_key: str = os.getenv("NVIDIA_API_KEY", "")
     nvidia_inference_api_key: str = os.getenv("NVIDIA_INFERENCE_API_KEY", "")
     nvidia_base_url: str = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
-    nemocron_model: str = os.getenv("NEMOTRON_MODEL", "nvidia/nemotron-3-nano-30b-a3b")
+    nemotron_model: str = os.getenv("NEMOTRON_MODEL", "nvidia/nemotron-3-nano-30b-a3b")
     kafka_bootstrap_servers: str = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")
     kafka_topic: str = os.getenv("KAFKA_TOPIC", "floodops.events")
     kafka_security_protocol: str = os.getenv("KAFKA_SECURITY_PROTOCOL", "SASL_SSL")
