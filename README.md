@@ -29,6 +29,18 @@ cp .env.example .env
 
 Open <http://127.0.0.1:8080>. The integration panel distinguishes configured services from verified services. Set `NVIDIA_API_KEY` or `NVIDIA_INFERENCE_API_KEY` in `.env` to enable live Nemotron assessment.
 
+## Test the project
+
+Run the deterministic end-to-end smoke path:
+
+```bash
+make smoke
+```
+
+Then open <http://127.0.0.1:8080> and click **Run replay simulation**. This works without external model credentials. **Run live assessment** uses the real NWS/USGS feeds and NVIDIA Nemotron; it is blocked if the NVIDIA endpoint is unavailable.
+
+The smoke output reports the Supabase probe separately. A `404` from `/rest/v1/events` means the project is configured but the migration has not been deployed. Supabase GitHub integration must use the repository root (`.`) as its working directory and deploy the `supabase/migrations/` directory.
+
 ## Demo path
 
 For a deterministic demo, set `DATA_MODE=replay`, then call:
