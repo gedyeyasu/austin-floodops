@@ -40,6 +40,10 @@ class Settings:
     hiddenlayer_interactions_url: str = os.getenv("HIDDENLAYER_INTERACTIONS_URL", "")
     hiddenlayer_api_key: str = os.getenv("HIDDENLAYER_API_KEY", "")
     hiddenlayer_project: str = os.getenv("HIDDENLAYER_PROJECT", "austin-floodops")
+    # New v2 SDK - AITX 2026 key vendor
+    hiddenlayer_client_id: str = os.getenv("HIDDENLAYER_CLIENT_ID", "")
+    hiddenlayer_client_secret: str = os.getenv("HIDDENLAYER_CLIENT_SECRET", "")
+    hiddenlayer_hl_project_id: str = os.getenv("HIDDENLAYER_HL_PROJECT_ID", "default-project")
     first_responder_webhook_url: str = os.getenv("FIRST_RESPONDER_WEBHOOK_URL", "")
     first_responder_webhook_token: str = os.getenv("FIRST_RESPONDER_WEBHOOK_TOKEN", "")
     webeoc_api_url: str = os.getenv("WEBEOC_API_URL", "https://webeoc.tdem.texas.gov/tdem/api.asmx")
@@ -79,7 +83,14 @@ class Settings:
 
     @property
     def has_hiddenlayer(self) -> bool:
-        return bool(self.hiddenlayer_interactions_url and self.hiddenlayer_api_key)
+        return bool(
+            (self.hiddenlayer_interactions_url and self.hiddenlayer_api_key)
+            or (self.hiddenlayer_client_id and self.hiddenlayer_client_secret)
+        )
+
+    @property
+    def has_hiddenlayer_v2(self) -> bool:
+        return bool(self.hiddenlayer_client_id and self.hiddenlayer_client_secret)
 
     @property
     def has_first_responder(self) -> bool:

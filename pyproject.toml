@@ -19,7 +19,9 @@ dependencies = [
 [project.optional-dependencies]
 streaming = ["kafka-python>=2.0,<3"]
 supabase = ["supabase>=2.15,<3"]
+security = ["hiddenlayer-sdk>=3.8,<4"]
 test = ["pytest>=8.3,<9", "pytest-asyncio>=0.24,<1"]
+texas = ["kafka-python>=2.0,<3", "supabase>=2.15,<3", "hiddenlayer-sdk>=3.8,<4", "pyjwt>=2.8,<3"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
