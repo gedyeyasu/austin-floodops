@@ -11,7 +11,9 @@ The current vertical slice is real-data-first:
 - `openshell/austin-floodops.yaml` is the restrictive sandbox policy artifact: public evidence and NVIDIA inference are allowlisted, credentials are narrowed, and actions default to deny.
 - `POST /api/simulate` runs the deterministic `threshold-v1` impact model against live or replay evidence. It estimates screening exposure, depth, route delay, and priority crossings; it is not a hydraulic forecast and every assumption is returned in the response.
 - `GET /api/decisions/{incident_id}/cap` exports a standards-based CAP 1.2 message. `POST /api/decisions/{incident_id}/first-responder` can send it to a configured responder webhook only after the decision is approved and the request includes `confirm=true`; delivery is idempotent.
+- `POST /api/decisions/{incident_id}/webeoc` is the primary Texas responder adapter. It submits the approved CAP payload through TDEM WebEOC's documented SOAP `AddData` operation; it remains blocked until an authorized board/position/incident configuration is present.
 - HiddenLayer is an optional runtime scan of the Nemotron interaction. Set its tenant-specific Interactions URL and key to enable fail-closed scanning. NemoClaw/OpenShell remains provider-managed: the sandbox policy does not expose raw inference credentials.
+- Deployment target: run the API/agent in a NemoClaw/OpenShell container (Brev is preferred for the NVIDIA demo) and use Supabase Postgres/Realtime for the durable ledger. Apply `supabase/schema.sql` after creating the project; do not deploy the FastAPI process to Supabase, and never put its service-role key in browser code.
 - `DATA_MODE=replay` uses the checked-in East Austin scenario only for repeatable tests and demos. Replay is always labeled replay.
 
 ## Run locally

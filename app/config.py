@@ -39,6 +39,13 @@ class Settings:
     hiddenlayer_project: str = os.getenv("HIDDENLAYER_PROJECT", "austin-floodops")
     first_responder_webhook_url: str = os.getenv("FIRST_RESPONDER_WEBHOOK_URL", "")
     first_responder_webhook_token: str = os.getenv("FIRST_RESPONDER_WEBHOOK_TOKEN", "")
+    webeoc_api_url: str = os.getenv("WEBEOC_API_URL", "https://webeoc.tdem.texas.gov/tdem/api.asmx")
+    webeoc_username: str = os.getenv("WEBEOC_USERNAME", "")
+    webeoc_password: str = os.getenv("WEBEOC_PASSWORD", "")
+    webeoc_position: str = os.getenv("WEBEOC_POSITION", "")
+    webeoc_incident: str = os.getenv("WEBEOC_INCIDENT", "")
+    webeoc_board_name: str = os.getenv("WEBEOC_BOARD_NAME", "")
+    webeoc_input_view_name: str = os.getenv("WEBEOC_INPUT_VIEW_NAME", "")
     openshell_gateway: str = os.getenv("OPENSHELL_GATEWAY", "")
 
     @property
@@ -64,6 +71,20 @@ class Settings:
     @property
     def has_first_responder(self) -> bool:
         return bool(self.first_responder_webhook_url and self.first_responder_webhook_token)
+
+    @property
+    def has_webeoc(self) -> bool:
+        return all(
+            (
+                self.webeoc_api_url,
+                self.webeoc_username,
+                self.webeoc_password,
+                self.webeoc_position,
+                self.webeoc_incident,
+                self.webeoc_board_name,
+                self.webeoc_input_view_name,
+            )
+        )
 
     @property
     def has_openshell(self) -> bool:

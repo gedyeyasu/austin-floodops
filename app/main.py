@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, Response
 from app.config import settings
 from app.models import FirstResponderDispatchRequest, HealthResponse, IncidentRequest, OperatorFeedback, SimulationRequest
 from app.responders.cap import ResponderUnavailable, build_cap_alert, send_cap
+from app.responders.webeoc import WebEOCConfig, WebEOCUnavailable, send_to_webeoc
 from app.security.hiddenlayer import HiddenLayerUnavailable, scan_interaction
 from app.service import FloodOpsService
 from app.streaming.kafka import KafkaUnavailable
@@ -33,6 +34,7 @@ async def health() -> HealthResponse:
         {"name": "NemoClaw/OpenShell", "configured": settings.has_openshell, "verified": False, "detail": "Set OPENSHELL_GATEWAY after selecting a gateway"},
         {"name": "HiddenLayer runtime", "configured": settings.has_hiddenlayer, "verified": False, "detail": "Tenant-supplied Interactions API endpoint"},
         {"name": "First-responder CAP webhook", "configured": settings.has_first_responder, "verified": False, "detail": "Approval-gated generic CAP 1.2 sender"},
+        {"name": "Texas TDEM WebEOC", "configured": settings.has_webeoc, "verified": False, "detail": "Approval-gated AddData SOAP adapter"},
     ]
     status = "ok" if settings.has_nvidia_key else "degraded"
     return HealthResponse(status=status, mode=settings.data_mode, integrations=integrations)
@@ -129,6 +131,35 @@ async def first_responder(incident_id: str, payload: FirstResponderDispatchReque
         return {"status": "blocked", "detail": str(exc)}
     service.store.record_delivery(incident_id, channel, status)
     return {"status": "delivered", "incident_id": incident_id, "response_status": status}
+
+
+@app.post("/api/decisions/{incident_id}/webeoc")
+async def webeoc(incident_id: str, payload: FirstResponderDispatchRequest) -> dict:
+    decision = next((item for item in service.store.list_decisions() if item.incident_id == incident_id), None)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    if not payload.confirm:
+        return {"status": "blocked", "detail": "Set confirm=true after reviewing the CAP payload."}
+    if decision.policy_status != "allowed":
+        return {"status": "blocked", "detail": "Approve the reversible action before sending to WebEOC."}
+    channel = "tdem-webeoc"
+    if service.store.delivery_exists(incident_id, channel):
+        return {"status": "already_delivered", "incident_id": incident_id}
+    config = WebEOCConfig(
+        api_url=settings.webeoc_api_url,
+        username=settings.webeoc_username,
+        password=settings.webeoc_password,
+        position=settings.webeoc_position,
+        incident=settings.webeoc_incident,
+        board_name=settings.webeoc_board_name,
+        input_view_name=settings.webeoc_input_view_name,
+    )
+    try:
+        result = await send_to_webeoc(config, incident_id=incident_id, cap_payload=build_cap_alert(decision))
+    except WebEOCUnavailable as exc:
+        return {"status": "blocked", "detail": str(exc)}
+    service.store.record_delivery(incident_id, channel, result)
+    return {"status": "delivered", "incident_id": incident_id, "webeoc_result": result}
 
 
 @app.post("/api/decisions/{incident_id}/feedback")
