@@ -22,7 +22,7 @@ async def collect_live(*, user_agent: str, site_id: str, parameter_codes: str) -
 async def collect_live_with_status(
     *, user_agent: str, site_id: str, parameter_codes: str
 ) -> tuple[list[FloodEvent], dict[str, dict[str, Any]]]:
-    # Lazy import Austin sources to avoid circular/hard fails if not installed
+    # Lazy import Austin + Texas sources to avoid hard fails
     try:
         from app.sources.austin import fetch_austin_crossings, fetch_austin_road_closures
     except Exception:
@@ -33,15 +33,37 @@ async def collect_live_with_status(
         async def fetch_austin_road_closures(limit=50):  # type: ignore
             return []
 
+    try:
+        from app.sources.lcra import fetch_lcra_stages
+    except Exception:
+
+        async def fetch_lcra_stages(limit=20, mode="live"):  # type: ignore
+            return []
+
+    try:
+        from app.sources.txdot import fetch_txdot_closures, fetch_austin_311
+    except Exception:
+
+        async def fetch_txdot_closures(limit=30, mode="live"):  # type: ignore
+            return []
+
+        async def fetch_austin_311(limit=20, mode="live"):  # type: ignore
+            return []
+
     nws_task = fetch_nws_alerts(user_agent=user_agent)
     usgs_task = fetch_usgs_observations(site_id=site_id, parameter_codes=parameter_codes)
     austin_crossings_task = fetch_austin_crossings(limit=50)
     austin_roads_task = fetch_austin_road_closures(limit=30)
+    lcra_task = fetch_lcra_stages(limit=15)
+    txdot_task = fetch_txdot_closures(limit=20)
+    austin_311_task = fetch_austin_311(limit=15)
 
-    results = await asyncio.gather(nws_task, usgs_task, austin_crossings_task, austin_roads_task, return_exceptions=True)
+    results = await asyncio.gather(
+        nws_task, usgs_task, austin_crossings_task, austin_roads_task, lcra_task, txdot_task, austin_311_task, return_exceptions=True
+    )
     events: list[FloodEvent] = []
     status: dict[str, dict[str, Any]] = {}
-    source_names = ("nws", "usgs", "austin_crossings", "austin_roads")
+    source_names = ("nws", "usgs", "austin_crossings", "austin_roads", "lcra", "txdot", "austin_311")
     for source, result in zip(source_names, results, strict=True):
         if isinstance(result, list):
             events.extend(result)
@@ -49,8 +71,7 @@ async def collect_live_with_status(
         else:
             status[source] = {"status": "degraded", "error": type(result).__name__, "detail": str(result)[:300]}
 
-    # Compatibility: keep older heartbeat logic expecting usgs+nws keys only,
-    # but also expose new ones - heartbeat aggregator will handle both.
+    # Compatibility: older heartbeat logic expecting usgs+nws keys only, but expose new ones too
     return events, status
 
 

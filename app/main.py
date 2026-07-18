@@ -495,3 +495,142 @@ async def after_action(incident_id: str, actor: Actor = Depends(require_action("
         )
 
     return report
+
+
+# --- Texas Resource Management ---
+class ResourceCreateRequest(BaseModel):
+    id: str = Field(..., description="Unique resource ID e.g. barricade-001")
+    type: str = Field(..., description="barricade, high_water_vehicle, shelter, personnel, gate, pump")
+    name: str
+    location: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    capacity: int = 0
+    notes: str | None = None
+    status: str = "available"
+
+
+@app.get("/api/resources")
+async def list_resources(type: str | None = None, status: str | None = None, limit: int = 100, actor: Actor = Depends(require_action("view"))) -> list[dict]:
+    return service.store.list_resources(type_filter=type, status_filter=status, limit=limit)
+
+
+@app.get("/api/resources/{resource_id}")
+async def get_resource(resource_id: str, actor: Actor = Depends(require_action("view"))) -> dict:
+    res = service.store.get_resource(resource_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    return res
+
+
+@app.post("/api/resources")
+async def create_resource(req: ResourceCreateRequest, actor: Actor = Depends(require_action("approve"))) -> dict:
+    try:
+        rid = service.store.create_resource(req.model_dump())
+        if service.audit_chain:
+            service._audit(incident_id=rid, event_type="resource_created", actor_id=actor.sub, actor_role=actor.role.value, payload=req.model_dump())
+        return {"status": "created", "id": rid}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/resources/{resource_id}/assign")
+async def assign_resource(resource_id: str, incident_id: str, distance_m: float | None = None, eta_minutes: int | None = None, actor: Actor = Depends(require_action("approve"))) -> dict:
+    ok = service.store.assign_resource(resource_id, incident_id, assigned_by=actor.sub, distance_m=distance_m, eta_minutes=eta_minutes)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Resource not available or not found")
+    if service.audit_chain:
+        service._audit(incident_id=incident_id, event_type="resource_assigned", actor_id=actor.sub, actor_role=actor.role.value, payload={"resource_id": resource_id, "distance_m": distance_m, "eta": eta_minutes})
+    return {"status": "assigned", "resource_id": resource_id, "incident_id": incident_id, "by": actor.sub}
+
+
+@app.post("/api/resources/{resource_id}/release")
+async def release_resource(resource_id: str, actor: Actor = Depends(require_action("approve"))) -> dict:
+    ok = service.store.release_resource(resource_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    if service.audit_chain:
+        service._audit(incident_id=resource_id, event_type="resource_released", actor_id=actor.sub, actor_role=actor.role.value, payload={"resource_id": resource_id})
+    return {"status": "released", "resource_id": resource_id}
+
+
+@app.get("/api/resources/assignments/{incident_id}")
+async def list_assignments(incident_id: str, actor: Actor = Depends(require_action("view"))) -> list[dict]:
+    return service.store.list_assignments(incident_id=incident_id)
+
+
+# --- Texas FOIA Exports ---
+@app.get("/api/export/events.csv")
+async def export_events_csv(limit: int = 500, actor: Actor = Depends(require_action("audit_read"))) -> Response:
+    from app.responders.foia import export_events_csv
+
+    events = service.store.list_events(limit=limit)
+    csv_data = export_events_csv(events)
+    return Response(content=csv_data, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=floodops-events-{limit}.csv"})
+
+
+@app.get("/api/export/decisions.csv")
+async def export_decisions_csv(limit: int = 200, actor: Actor = Depends(require_action("audit_read"))) -> Response:
+    from app.responders.foia import export_decisions_csv
+
+    decisions = service.store.list_decisions(limit=limit)
+    csv_data = export_decisions_csv(decisions)
+    return Response(content=csv_data, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=floodops-decisions-{limit}.csv"})
+
+
+@app.get("/api/decisions/{incident_id}/edxl-de")
+async def export_edxl_de(incident_id: str, actor: Actor = Depends(require_action("audit_read"))) -> Response:
+    from app.responders.foia import build_edxl_de
+
+    decision = _decision(incident_id)
+    events = service.store.events_by_id(decision.evidence_event_ids)
+    edxl = build_edxl_de(decision, events)
+    return Response(content=edxl, media_type="application/xml", headers={"Content-Disposition": f"attachment; filename={incident_id}-EDXL-DE.xml"})
+
+
+@app.get("/api/decisions/{incident_id}/foia")
+async def export_foia_bundle(incident_id: str, actor: Actor = Depends(require_action("audit_read"))) -> dict:
+    from app.responders.after_action import generate_after_action_report
+    from app.responders.foia import build_edxl_de, export_events_csv
+    from app.responders.cap import build_cap_alert
+
+    decision = _decision(incident_id)
+    events = service.store.events_by_id(decision.evidence_event_ids)
+    report = generate_after_action_report(incident_id=incident_id, store=service.store, audit_chain=service.audit_chain)
+
+    return {
+        "incident_id": incident_id,
+        "texas_banner": "Built for the Great State of Texas - The Lone Star State - TDEM Ready",
+        "cap_xml": build_cap_alert(decision).decode("utf-8"),
+        "edxl_de_xml": build_edxl_de(decision, events).decode("utf-8"),
+        "events_csv": export_events_csv(events),
+        "after_action_json": report,
+        "audit_verification": service.audit_chain.verify_chain(incident_id) if service.audit_chain else {"valid": False},
+        "foia_note": "Texas Public Information Act - 7yr retention, Confidential - Emergency Operations, FOIA exportable",
+    }
+
+
+# --- PWA + Texas Branding Static ---
+@app.get("/static/manifest.json", include_in_schema=False)
+async def pwa_manifest() -> FileResponse:
+    return FileResponse(Path(__file__).parent / "static" / "manifest.json", media_type="application/manifest+json")
+
+
+@app.get("/static/sw.js", include_in_schema=False)
+async def pwa_sw() -> FileResponse:
+    return FileResponse(Path(__file__).parent / "static" / "sw.js", media_type="application/javascript")
+
+
+@app.get("/static/offline.html", include_in_schema=False)
+async def pwa_offline() -> FileResponse:
+    return FileResponse(Path(__file__).parent / "static" / "offline.html", media_type="text/html")
+
+
+# Mount static dir for all other assets (leaflet, etc) - must be after specific routes
+try:
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
+except Exception:
+    pass
+
