@@ -18,3 +18,10 @@ done
 
 curl -fsS -X POST "$base/api/evaluation/run"
 printf '\nDashboard: %s\n' "$base"
+
+if [[ "${DEMO_ONESHOT:-false}" == "true" ]]; then
+  exit 0
+fi
+
+printf 'Demo server is running. Press Ctrl-C to stop.\n'
+wait "$server_pid"

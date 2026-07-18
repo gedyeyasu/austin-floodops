@@ -57,7 +57,7 @@ Start the server and execute the credential-free three-scenario learning evaluat
 make demo
 ```
 
-The evaluation runs in an isolated temporary ledger. It compares the same three scenarios before and after an operator-derived rule, reporting accuracy, latency, and intervention count without writing to live Supabase, Kafka, HiddenLayer, or dispatch integrations. The dashboard also exposes the same evaluation through `POST /api/evaluation/run`.
+The evaluation runs in an isolated temporary ledger and leaves the dashboard server open until you press Ctrl-C. It compares the same three scenarios before and after an operator-derived rule, reporting accuracy, latency, and intervention count without writing to live Supabase, Kafka, HiddenLayer, or dispatch integrations. Set `DEMO_ONESHOT=true` when a script should run the evaluation and exit. The dashboard also exposes the same evaluation through `POST /api/evaluation/run`.
 
 For an individual replay assessment using the real configured Nemotron endpoint, call:
 
