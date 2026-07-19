@@ -1,8 +1,9 @@
 # Austin FloodOps: four-minute Loom recording script
 
 This is the final presenter script for a two-to-five-minute hackathon video.
-Keep the camera bubble on, speak slowly, and leave the cursor beside the evidence
-you are describing. The target length is four minutes and fifteen seconds.
+Keep the camera bubble on, speak at a steady conversational pace, and leave the
+cursor beside the evidence you are describing. The target length is four
+minutes and thirty-five seconds.
 
 ## Before recording
 
@@ -15,20 +16,27 @@ you are describing. The target length is four minutes and fifteen seconds.
 6. It is acceptable for Austin road closures, Lower Colorado River Authority, DriveTexas, and Austin 311 to show degraded. That proves the application exposes source failure instead of fabricating records.
 7. Close unrelated tabs and notifications. Keep this script on a second device or printed page so the recording shows only the product.
 
-## 0:00–0:25: Open with the human stakes
+## 0:00–0:45: Explain the Texas motivation and human stakes
 
 **Screen:** Start on the top of the dashboard. Keep the application name,
-heartbeat, source state, and event timeline visible.
+heartbeat, source state, and event timeline visible. Use one respectful still
+image of the Texas Hill Country only if its license and source are clear. Do not
+use graphic disaster imagery.
 
 **Say:**
 
-> Flood response is not only a water problem. It is a coordination problem.
-> Weather warnings, river gages, crossing locations, road information, and
-> operator playbooks live in separate systems while conditions change by the
-> minute. Austin FloodOps turns that fragmented evidence into one cited,
-> reversible recommendation while keeping a trained human in control.
+> Austin FloodOps is motivated by the flooding crisis in the great state of
+> Texas. On July fourth, 2025, the catastrophic Hill Country flood killed at
+> least 135 people across Central Texas, including 117 people in Kerr County.
+> At Hunt, the Guadalupe River rose from about ten feet to 37.52 feet in just
+> over two hours. And this week, San Antonio again faced flash flooding and
+> severe weather: numerous low-water crossings flooded, and the city barricaded
+> twenty crossings while crews assessed damage. This system cannot stop rain or
+> claim it would have prevented those deaths. It tries to help officials act
+> sooner by turning fragmented warnings, gage readings, and crossing information
+> into one cited, reversible recommendation with a human still in control.
 
-## 0:25–0:55: Prove the live-data track
+## 0:45–1:10: Prove the live-data track
 
 **Screen:** Point to the heartbeat cycle, last-success time, the successful
 National Weather Service and United States Geological Survey sources, the
@@ -37,13 +45,12 @@ source timestamps, and one degraded optional source.
 **Say:**
 
 > This is the Red Hat Live Data track. Every thirty seconds the deployed agent
-> polls real public feeds, normalizes their different formats, preserves the
-> source and observation time, deduplicates unchanged records, and reacts when
-> new evidence arrives. The live path currently receives official weather,
-> water, and Austin crossing records. An unavailable optional feed stays red or
-> degraded. It is never replaced with fake live data.
+> checks real public feeds, preserves source and observation time, deduplicates
+> unchanged records, and reacts when evidence changes. The live path receives
+> official weather, water, and Austin crossing records. An unavailable optional
+> feed stays degraded and is never replaced with fake live data.
 
-## 0:55–1:25: Explain the real stream and deployed stack
+## 1:10–1:35: Explain the real stream and deployed stack
 
 **Screen:** Scroll or point to the integration gate. Highlight the
 Kafka-compatible stream, Supabase, and OpenShift-backed public route.
@@ -51,13 +58,12 @@ Kafka-compatible stream, Supabase, and OpenShift-backed public route.
 **Say:**
 
 > The application and a Redpanda broker run continuously on Red Hat OpenShift.
-> Redpanda implements the Apache Kafka protocol. Every new event is published,
-> consumed, schema-validated, and matched by event identifier before assessment.
-> SQLite keeps the authoritative ledger on a persistent OpenShift volume, while
-> Supabase mirrors events and decisions into hosted PostgreSQL. If a mirror
-> write fails, the local evidence is not lost.
+> Every new event is published through the Apache Kafka protocol, consumed,
+> validated, and matched by identifier before assessment. SQLite keeps the
+> authoritative ledger on persistent storage, while Supabase mirrors the record
+> into hosted PostgreSQL without becoming a single point of failure.
 
-## 1:25–2:05: Run the judged incident
+## 1:35–2:15: Run the judged incident
 
 **Screen:** Click **Inject · gage rise + warning**. While it runs, point to the
 Replay state so nobody mistakes the deterministic scenario for current weather.
@@ -74,21 +80,20 @@ confidence, citations, proposed action, and Pending approval state.
 > arbitrary tool or silently invent evidence. Every citation must exactly match
 > an event identifier supplied to the model, or the assessment fails closed.
 
-## 2:05–2:30: Separate reasoning from flood physics
+## 2:15–2:35: Separate reasoning from flood physics
 
 **Screen:** Point to the Impact and Assumptions panel. Do not call the displayed
 depth an official water-depth forecast.
 
 **Say:**
 
-> Two different forms of reasoning are visible. Nemotron correlates the evidence
-> and explains a reversible action. A deterministic threshold model separately
-> produces an illustrative severity, exposure, and delay estimate. That estimate
-> is transparent and useful for rehearsal, but it is not a hydraulic flood model.
-> Operational depth prediction would require station calibration, terrain,
-> drainage, rainfall-runoff modeling, uncertainty, and agency validation.
+> Nemotron correlates the evidence and explains a reversible action. A separate
+> deterministic model produces an illustrative severity, exposure, and delay.
+> It is transparent, but it is not a hydraulic flood model. Operational depth
+> prediction still requires station calibration, terrain, drainage, uncertainty,
+> and agency validation.
 
-## 2:30–2:55: Prove human authority and auditability
+## 2:35–3:00: Prove human authority and auditability
 
 **Screen:** Click **Approve reversible action**. Point to the Approved state.
 Click **Refresh recent audit**, then **Verify chain**.
@@ -101,7 +106,7 @@ Click **Refresh recent audit**, then **Verify chain**.
 > without organization-issued settings. The audit chain records the actor,
 > decision, and previous record hash, so later edits become detectable.
 
-## 2:55–3:25: Prove that operator feedback can change later behavior
+## 3:00–3:25: Prove that operator feedback can change later behavior
 
 **Screen:** Click **Run learning evaluation**. Point to Run 1 and Run 2 plus
 memory in the chart and the intervention comparison.
@@ -130,7 +135,7 @@ configured in the public pod.
 > undeclared network destination. I am not pretending that separate sandbox is
 > the boundary around this public OpenShift pod.
 
-## 3:50–4:15: Close on impact and credibility
+## 3:50–4:35: Close on impact and credibility
 
 **Screen:** Return to the incident card and keep the live heartbeat visible.
 End on the repository or submission page only if it is already public.
@@ -140,9 +145,23 @@ End on the repository or submission page only if it is already public.
 > Austin FloodOps does not stop rainfall, replace incident command, or claim an
 > authorized government connection. It shortens the path from fresh, fragmented
 > evidence to a secure, cited, human-approved decision, and preserves why that
-> decision changed. The same adapter pattern can later support wildfire, heat,
-> tornado, and other fast-moving hazards. The next step is an agency-sponsored
-> shadow pilot with calibrated hydrology and field validation.
+> decision changed. The goal is not to replace the National Weather Service,
+> emergency managers, or first responders. It is to help them see converging
+> evidence and consider a protective action sooner. The same adapter pattern can
+> later support wildfire, heat, tornado, and other fast-moving hazards. The next
+> step is an agency-sponsored shadow pilot with calibrated hydrology and field
+> validation.
+
+## Motivation sources for the presenter
+
+- The [Texas House report on the July 4, 2025 Camp Mystic and Hill Country flood](https://www.house.texas.gov/pdfs/committees/355/Report-on-the-Camp-Mystic-Flood-Disaster-of-July-4-2025.pdf) reports at least 135 deaths across Central Texas, 117 deaths in Kerr County including 37 children, and the Guadalupe River at Hunt rising from about 10 feet around 3:00 a.m. to a 37.52-foot crest at 5:10 a.m.
+- The [City of San Antonio's July 15, 2026 severe-weather update](https://www.sa.gov/Directory/News-Releases/City-Responds-to-Tornado-and-Severe-Weather) reports significant storm damage, 20 barricaded low-water crossings, cleanup and damage assessment, and no reported injuries.
+- The [National Weather Service Austin and San Antonio preliminary storm report](https://forecast.weather.gov/product.php?format=CI&glossary=1&issuedby=EWX&product=LSR&site=SJT&version=1) records flash flooding around Leon Valley and numerous flooded low-water crossings on the northwest side of San Antonio.
+
+These sources support the motivation, not a counterfactual claim. Never say that
+Austin FloodOps would have prevented a specific death or disaster. Say it is
+designed to reduce the coordination delay between existing warning evidence and
+a reviewed protective action.
 
 ## Recording recovery plan
 
