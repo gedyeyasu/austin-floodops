@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import pytest
 from fastapi import HTTPException
 
-from app.auth import Actor, Role, require_action
+from app.auth import Actor, Role, current_actor, require_action
 from app.config import settings
 from app.model.nemotron import IntegrationUnavailable, _decision_payload, _extract_json, _ground_citations, _ground_model_references, _select_evidence, build_incident_request
 from app.models import FloodEvent, IncidentDecision, IncidentRequest, PlaybookRule, ProposedAction
@@ -244,6 +244,26 @@ async def test_action_permissions_do_not_leak_across_similarly_ranked_roles():
 def test_secure_auth_requires_independent_long_secrets():
     assert replace(settings, jwt_secret="x" * 32, auth_bootstrap_token="").has_secure_auth is False
     assert replace(settings, jwt_secret="x" * 32, auth_bootstrap_token="y" * 32).has_secure_auth is True
+
+
+@pytest.mark.asyncio
+async def test_secure_public_mode_is_read_only(monkeypatch):
+    from app import auth
+
+    secure = replace(
+        settings,
+        enable_rbac=True,
+        jwt_secret="j" * 32,
+        auth_bootstrap_token="b" * 32,
+    )
+    monkeypatch.setattr(auth, "settings", secure)
+    anonymous = await current_actor(credentials=None)
+    assert anonymous.role is Role.viewer
+    assert anonymous.sub == "anonymous"
+    assert await require_action("view")(actor=anonymous) == anonymous
+    with pytest.raises(HTTPException) as denied:
+        await require_action("assess")(actor=anonymous)
+    assert denied.value.status_code == 403
 
 
 @pytest.mark.asyncio

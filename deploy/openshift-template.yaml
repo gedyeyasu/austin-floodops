@@ -1,0 +1,302 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: austin-floodops
+  annotations:
+    description: Austin FloodOps application, durable ledger, route, and Kafka-compatible Redpanda broker.
+parameters:
+  - name: NAMESPACE
+    description: OpenShift project that owns the deployment.
+    required: true
+  - name: APP_STORAGE
+    value: 1Gi
+  - name: STREAM_STORAGE
+    value: 2Gi
+objects:
+  - apiVersion: image.openshift.io/v1
+    kind: ImageStream
+    metadata:
+      name: austin-floodops
+      labels:
+        app.kubernetes.io/part-of: austin-floodops
+
+  - apiVersion: build.openshift.io/v1
+    kind: BuildConfig
+    metadata:
+      name: austin-floodops
+      labels:
+        app.kubernetes.io/part-of: austin-floodops
+    spec:
+      source:
+        type: Binary
+        binary: {}
+      strategy:
+        type: Docker
+        dockerStrategy:
+          dockerfilePath: Dockerfile
+      output:
+        to:
+          kind: ImageStreamTag
+          name: austin-floodops:latest
+      successfulBuildsHistoryLimit: 2
+      failedBuildsHistoryLimit: 2
+      runPolicy: SerialLatestOnly
+
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: floodops-data
+      labels:
+        app.kubernetes.io/part-of: austin-floodops
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests:
+          storage: ${APP_STORAGE}
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: austin-floodops
+      labels:
+        app.kubernetes.io/name: austin-floodops
+        app.kubernetes.io/part-of: austin-floodops
+      annotations:
+        image.openshift.io/triggers: >-
+          [{"from":{"kind":"ImageStreamTag","name":"austin-floodops:latest","namespace":"${NAMESPACE}"},"fieldPath":"spec.template.spec.containers[?(@.name==\"app\")].image","pause":"false"}]
+    spec:
+      replicas: 1
+      strategy:
+        type: Recreate
+      selector:
+        matchLabels:
+          app.kubernetes.io/name: austin-floodops
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: austin-floodops
+            app.kubernetes.io/part-of: austin-floodops
+        spec:
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: app
+              image: image-registry.openshift-image-registry.svc:5000/${NAMESPACE}/austin-floodops:latest
+              imagePullPolicy: Always
+              ports:
+                - name: http
+                  containerPort: 8080
+              envFrom:
+                - secretRef:
+                    name: floodops-secrets
+              env:
+                - name: APP_ENV
+                  value: production
+                - name: DATA_MODE
+                  value: live
+                - name: HOST
+                  value: 0.0.0.0
+                - name: PORT
+                  value: "8080"
+                - name: DB_PATH
+                  value: /app/data/floodops.sqlite3
+                - name: HEARTBEAT_ENABLED
+                  value: "true"
+                - name: POLL_SECONDS
+                  value: "30"
+                - name: KAFKA_BOOTSTRAP_SERVERS
+                  value: redpanda:9092
+                - name: KAFKA_TOPIC
+                  value: floodops.events
+                - name: KAFKA_SECURITY_PROTOCOL
+                  value: PLAINTEXT
+                - name: ENABLE_RBAC
+                  value: "true"
+                - name: JWT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: floodops-auth
+                      key: JWT_SECRET
+                - name: AUTH_BOOTSTRAP_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: floodops-auth
+                      key: AUTH_BOOTSTRAP_TOKEN
+              readinessProbe:
+                httpGet:
+                  path: /health
+                  port: http
+                initialDelaySeconds: 10
+                periodSeconds: 10
+                timeoutSeconds: 5
+                failureThreshold: 6
+              livenessProbe:
+                httpGet:
+                  path: /health
+                  port: http
+                initialDelaySeconds: 30
+                periodSeconds: 20
+                timeoutSeconds: 5
+                failureThreshold: 3
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 384Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+              volumeMounts:
+                - name: data
+                  mountPath: /app/data
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: floodops-data
+            - name: tmp
+              emptyDir: {}
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: austin-floodops
+      labels:
+        app.kubernetes.io/name: austin-floodops
+        app.kubernetes.io/part-of: austin-floodops
+    spec:
+      selector:
+        app.kubernetes.io/name: austin-floodops
+      ports:
+        - name: http
+          port: 8080
+          targetPort: http
+
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: austin-floodops
+      labels:
+        app.kubernetes.io/part-of: austin-floodops
+      annotations:
+        haproxy.router.openshift.io/timeout: 60s
+    spec:
+      to:
+        kind: Service
+        name: austin-floodops
+      port:
+        targetPort: http
+      tls:
+        termination: edge
+        insecureEdgeTerminationPolicy: Redirect
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: redpanda
+      labels:
+        app.kubernetes.io/name: redpanda
+        app.kubernetes.io/part-of: austin-floodops
+    spec:
+      clusterIP: None
+      selector:
+        app.kubernetes.io/name: redpanda
+      ports:
+        - name: kafka
+          port: 9092
+          targetPort: kafka
+        - name: admin
+          port: 9644
+          targetPort: admin
+        - name: rpc
+          port: 33145
+          targetPort: rpc
+
+  - apiVersion: apps/v1
+    kind: StatefulSet
+    metadata:
+      name: redpanda
+      labels:
+        app.kubernetes.io/name: redpanda
+        app.kubernetes.io/part-of: austin-floodops
+    spec:
+      serviceName: redpanda
+      replicas: 1
+      selector:
+        matchLabels:
+          app.kubernetes.io/name: redpanda
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: redpanda
+            app.kubernetes.io/part-of: austin-floodops
+        spec:
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: redpanda
+              image: docker.redpanda.com/redpandadata/redpanda:v26.1.13
+              imagePullPolicy: IfNotPresent
+              args:
+                - redpanda
+                - start
+                - --kafka-addr=0.0.0.0:9092
+                - --advertise-kafka-addr=redpanda:9092
+                - --rpc-addr=0.0.0.0:33145
+                - --advertise-rpc-addr=redpanda-0.redpanda:33145
+                - --mode=dev-container
+                - --smp=1
+                - --default-log-level=info
+              ports:
+                - name: kafka
+                  containerPort: 9092
+                - name: admin
+                  containerPort: 9644
+                - name: rpc
+                  containerPort: 33145
+              readinessProbe:
+                httpGet:
+                  path: /v1/status/ready
+                  port: admin
+                initialDelaySeconds: 10
+                periodSeconds: 10
+                timeoutSeconds: 5
+                failureThreshold: 12
+              livenessProbe:
+                httpGet:
+                  path: /v1/status/ready
+                  port: admin
+                initialDelaySeconds: 30
+                periodSeconds: 20
+                timeoutSeconds: 5
+                failureThreshold: 6
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 512Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/redpanda/data
+      volumeClaimTemplates:
+        - metadata:
+            name: data
+          spec:
+            accessModes: [ReadWriteOnce]
+            resources:
+              requests:
+                storage: ${STREAM_STORAGE}

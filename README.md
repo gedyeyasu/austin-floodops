@@ -39,8 +39,8 @@ NWS Alerts + USGS Gage + Austin Crossings + Road Closures
 | **NVIDIA Nemotron 3 Nano** | Runtime-verified | Structured incident assessment via the hosted NVIDIA endpoint; the gate turns verified only after a successful decision |
 | **HiddenLayer Runtime Security** | Runtime-verified | Six-boundary scan with pre-model prompt-injection quarantine; the gate reports the last real scan |
 | **NemoClaw / OpenShell** | Sandbox-only | Checked-in sandbox policy and deny evidence; Docker Compose alone does not enforce it |
-| **Kafka-compatible streaming** | Local Compose | Redpanda provides the Kafka protocol; `make stream-smoke` must prove publish → consume before assessment |
-| **Supabase** | Optional mirror | Remote probe plus best-effort mirror; SQLite remains authoritative if Supabase is unavailable |
+| **Kafka-compatible streaming** | Runtime-verified | Redpanda provides the Kafka protocol locally and on OpenShift; `make stream-smoke` proves publish → consume before assessment |
+| **Supabase** | Runtime-verified mirror | Remote probe plus best-effort mirror; SQLite remains authoritative if Supabase is unavailable |
 | **vLLM** | Optional fallback | Counts only when a real self-hosted endpoint is configured and used |
 
 ## Data Sources
@@ -94,6 +94,24 @@ make smoke        # Local API smoke: health + replay + security + configured pro
 make stream-smoke # Docker Compose Redpanda publish/consume verification on port 18081 by default
 make preflight   # Dependency status: NVIDIA, Kafka, Supabase, HiddenLayer, WebEOC, vLLM, OSRM
 ```
+
+## Deploy on Red Hat OpenShift
+
+The recommended hackathon deployment runs FastAPI and a real Kafka-compatible
+Redpanda broker on OpenShift while Supabase remains the remote PostgreSQL
+mirror:
+
+```bash
+brew install openshift-cli
+oc login --web https://api.<cluster-domain>:6443
+oc project <project-name>
+./scripts/deploy-openshift.sh
+```
+
+The script keeps `.env` out of the image, creates an OpenShift Secret, performs
+a binary container build, waits for both workloads, and verifies the public
+Transport Layer Security health endpoint. See
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Key Endpoints
 

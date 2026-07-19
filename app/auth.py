@@ -85,8 +85,11 @@ async def current_actor(credentials: HTTPAuthorizationCredentials | None = Depen
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Role-based access control is enabled but secure JWT and bootstrap secrets are not configured.",
         )
+    # A public deployment may expose source evidence and already-created
+    # decisions without exposing any mutating or model-backed operation.
+    # ACTION_ROLES grants the viewer role only the explicit `view` action.
     if credentials is None or not credentials.credentials:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization header missing")
+        return Actor(sub="anonymous", role=Role.viewer)
     return _decode_token(credentials.credentials)
 
 
