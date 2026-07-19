@@ -100,7 +100,7 @@ objects:
                 - name: PORT
                   value: "8080"
                 - name: DB_PATH
-                  value: /app/data/floodops.sqlite3
+                  value: /app/state/floodops.sqlite3
                 - name: HEARTBEAT_ENABLED
                   value: "true"
                 - name: POLL_SECONDS
@@ -166,7 +166,7 @@ objects:
                 runAsNonRoot: true
               volumeMounts:
                 - name: data
-                  mountPath: /app/data
+                  mountPath: /app/state
                 - name: tmp
                   mountPath: /tmp
           volumes:
