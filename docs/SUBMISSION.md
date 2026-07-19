@@ -21,7 +21,7 @@ When configured, a Kafka-compatible broker round-trips new records through publi
 - Team members, roles, and contact details: **ADD BEFORE SUBMISSION**
 - Loom URL, two to five minutes, camera on: **ADD BEFORE SUBMISSION**
 - Public repository URL: **MAKE PUBLIC ONLY AFTER CREDENTIAL ROTATION AND HISTORY CLEANUP**
-- Deployed URL or working-application capture: **ADD BEFORE SUBMISSION**
+- Deployed URL: https://austin-floodops-gedeon-tona-us-dev.apps.rm1.0a51.p1.openshiftapps.com
 
 ## Reproduction
 

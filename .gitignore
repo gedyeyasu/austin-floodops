@@ -15,3 +15,4 @@ build/
 *.egg-info/
 docs/*.m4a
 .DS_Store
+.gstack/

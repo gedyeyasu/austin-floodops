@@ -97,6 +97,8 @@ make preflight   # Dependency status: NVIDIA, Kafka, Supabase, HiddenLayer, WebE
 
 ## Deploy on Red Hat OpenShift
 
+Live hackathon deployment: https://austin-floodops-gedeon-tona-us-dev.apps.rm1.0a51.p1.openshiftapps.com
+
 The recommended hackathon deployment runs FastAPI and a real Kafka-compatible
 Redpanda broker on OpenShift while Supabase remains the remote PostgreSQL
 mirror:
