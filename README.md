@@ -118,6 +118,7 @@ Transport Layer Security health endpoint. See
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/health` | GET | Integration gate that distinguishes configured from verified |
+| `/api/auth/demo-login` | POST | Demo-only email/password login that issues an in-memory supervisor token |
 | `/api/heartbeat` | GET | Heartbeat state: cycle count, source status, last decision |
 | `/api/assess` | POST | Gather events → Nemotron assessment → policy gate → store |
 | `/api/simulate` | POST | Deterministic threshold-v1 impact model |

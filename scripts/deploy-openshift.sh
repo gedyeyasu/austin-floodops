@@ -45,6 +45,16 @@ if ! oc get secret floodops-auth >/dev/null 2>&1; then
   unset JWT_SECRET AUTH_BOOTSTRAP_TOKEN
 fi
 
+if [[ -n "${DEMO_LOGIN_EMAIL:-}" && -n "${DEMO_LOGIN_PASSWORD:-}" ]]; then
+  DEMO_LOGIN_PEPPER=$(oc get secret floodops-auth -o jsonpath='{.data.AUTH_BOOTSTRAP_TOKEN}' | base64 --decode)
+  DEMO_LOGIN_PASSWORD_HMAC=$(printf '%s' "$DEMO_LOGIN_PASSWORD" | openssl dgst -sha256 -hmac "$DEMO_LOGIN_PEPPER" -binary | xxd -p -c 256)
+  oc create secret generic floodops-demo-login \
+    --from-literal=DEMO_LOGIN_EMAIL="$DEMO_LOGIN_EMAIL" \
+    --from-literal=DEMO_LOGIN_PASSWORD_HMAC="$DEMO_LOGIN_PASSWORD_HMAC" \
+    --dry-run=client -o yaml | oc apply -f - >/dev/null
+  unset DEMO_LOGIN_PASSWORD DEMO_LOGIN_PASSWORD_HMAC DEMO_LOGIN_PEPPER
+fi
+
 oc process -f deploy/openshift-template.yaml \
   -p NAMESPACE="$PROJECT" | oc apply -f -
 

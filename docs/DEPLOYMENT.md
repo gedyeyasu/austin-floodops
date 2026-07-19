@@ -51,6 +51,14 @@ oc get secret floodops-auth -o jsonpath='{.data.AUTH_BOOTSTRAP_TOKEN}' | base64 
 
 The operator pastes it into the dashboard's role switcher to request an in-memory token. The browser never stores that token in local storage.
 
+For a shareable hackathon demonstration, the deploy script can create a separate email/password Secret without committing plaintext credentials:
+
+```bash
+DEMO_LOGIN_EMAIL='operator@example.com' DEMO_LOGIN_PASSWORD='<demo-password>' ./scripts/deploy-openshift.sh
+```
+
+The script stores only a keyed SHA-256 password digest in OpenShift; the independent authentication bootstrap secret is the key, so the stored digest is not a reusable plain password hash. Successful demo login issues an eight-hour `supervisor` token in browser memory. Anonymous visitors remain read-only, and failed login responses never reveal whether the email or password was incorrect.
+
 ## Supabase credit
 
 Use the hackathon Supabase credit for the existing hosted project, database storage, application programming interface traffic, logs, and backups. The service-role key remains only in the OpenShift Secret and is never sent to browser JavaScript. Supabase is the remote mirror; the OpenShift persistent volume keeps the application ledger available during a Supabase outage.

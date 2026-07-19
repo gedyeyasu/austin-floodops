@@ -64,6 +64,8 @@ class Settings:
     jwt_secret: str = os.getenv("JWT_SECRET", "dev-only-change-me-austin-floodops-jwt-secret")
     auth_bootstrap_token: str = os.getenv("AUTH_BOOTSTRAP_TOKEN", "")
     enable_rbac: bool = os.getenv("ENABLE_RBAC", "false").lower() in {"1", "true", "yes", "on"}
+    demo_login_email: str = os.getenv("DEMO_LOGIN_EMAIL", "").strip()
+    demo_login_password_hmac: str = os.getenv("DEMO_LOGIN_PASSWORD_HMAC", "").strip().lower()
     osrm_base_url: str = os.getenv("OSRM_BASE_URL", "https://router.project-osrm.org").rstrip("/")
     enable_prediction: bool = os.getenv("ENABLE_PREDICTION", "true").lower() in {"1", "true", "yes", "on"}
     enable_audit_chain: bool = os.getenv("ENABLE_AUDIT_CHAIN", "true").lower() in {"1", "true", "yes", "on"}
@@ -110,6 +112,14 @@ class Settings:
             self.jwt_secret not in insecure_secrets
             and len(self.jwt_secret) >= 32
             and len(self.auth_bootstrap_token) >= 32
+        )
+
+    @property
+    def has_demo_login(self) -> bool:
+        return bool(
+            self.demo_login_email
+            and len(self.demo_login_password_hmac) == 64
+            and all(char in "0123456789abcdef" for char in self.demo_login_password_hmac)
         )
 
     @property

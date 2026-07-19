@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import secrets
 import uuid
 from contextlib import asynccontextmanager
@@ -118,6 +120,11 @@ class TokenRequest(BaseModel):
     expires_minutes: int = Field(default=480, ge=1, le=10080)
 
 
+class DemoLoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=256)
+
+
 @app.post("/api/auth/token")
 async def auth_token(
     req: TokenRequest,
@@ -136,6 +143,42 @@ async def auth_token(
             raise HTTPException(status_code=401, detail="A valid X-FloodOps-Bootstrap-Token header is required.")
     token = create_token(sub=req.sub, role=role, expires_minutes=req.expires_minutes)
     return {"access_token": token, "token_type": "bearer", "role": role.value, "sub": req.sub, "expires_minutes": req.expires_minutes}
+
+
+@app.post("/api/auth/demo-login")
+async def demo_login(req: DemoLoginRequest) -> dict:
+    if not settings.enable_rbac or not settings.has_secure_auth or not settings.has_demo_login:
+        raise HTTPException(status_code=503, detail="Demo login is not configured.")
+
+    email = req.email.strip().casefold()
+    expected_email = settings.demo_login_email.casefold()
+    password_hmac = hmac.new(
+        settings.auth_bootstrap_token.encode("utf-8"),
+        req.password.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    email_matches = secrets.compare_digest(email, expected_email)
+    password_matches = secrets.compare_digest(password_hmac, settings.demo_login_password_hmac)
+    if not (email_matches and password_matches):
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+    expires_minutes = 480
+    role = Role.supervisor
+    token = create_token(sub=settings.demo_login_email, role=role, expires_minutes=expires_minutes)
+    service._audit(
+        incident_id=None,
+        event_type="demo_login",
+        actor_id=settings.demo_login_email,
+        actor_role=role.value,
+        payload={"authentication": "demo_email_password", "expires_minutes": expires_minutes},
+    )
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": role.value,
+        "sub": settings.demo_login_email,
+        "expires_minutes": expires_minutes,
+    }
 
 
 @app.get("/api/auth/me")

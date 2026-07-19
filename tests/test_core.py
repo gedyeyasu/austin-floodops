@@ -286,3 +286,30 @@ async def test_token_endpoint_rejects_system_role_and_requires_bootstrap(monkeyp
     issued = await main.auth_token(main.TokenRequest(role="operator"), bootstrap_token="b" * 32)
     assert issued["role"] == "operator"
     assert issued["access_token"]
+
+
+@pytest.mark.asyncio
+async def test_demo_login_issues_supervisor_token_without_storing_plaintext(monkeypatch):
+    import hashlib
+    import hmac
+
+    from app import main
+
+    password = "demo-password-for-test"
+    secure = replace(
+        settings,
+        enable_rbac=True,
+        jwt_secret="j" * 32,
+        auth_bootstrap_token="b" * 32,
+        demo_login_email="operator@example.test",
+        demo_login_password_hmac=hmac.new(b"b" * 32, password.encode(), hashlib.sha256).hexdigest(),
+    )
+    monkeypatch.setattr(main, "settings", secure)
+    issued = await main.demo_login(main.DemoLoginRequest(email="OPERATOR@example.test", password=password))
+    assert issued["role"] == "supervisor"
+    assert issued["sub"] == "operator@example.test"
+    assert issued["access_token"]
+
+    with pytest.raises(HTTPException) as denied:
+        await main.demo_login(main.DemoLoginRequest(email="operator@example.test", password="wrong"))
+    assert denied.value.status_code == 401

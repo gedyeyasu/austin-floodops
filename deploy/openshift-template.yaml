@@ -123,6 +123,18 @@ objects:
                     secretKeyRef:
                       name: floodops-auth
                       key: AUTH_BOOTSTRAP_TOKEN
+                - name: DEMO_LOGIN_EMAIL
+                  valueFrom:
+                    secretKeyRef:
+                      name: floodops-demo-login
+                      key: DEMO_LOGIN_EMAIL
+                      optional: true
+                - name: DEMO_LOGIN_PASSWORD_HMAC
+                  valueFrom:
+                    secretKeyRef:
+                      name: floodops-demo-login
+                      key: DEMO_LOGIN_PASSWORD_HMAC
+                      optional: true
               readinessProbe:
                 httpGet:
                   path: /health

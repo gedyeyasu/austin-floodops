@@ -236,18 +236,27 @@
         </div>
         <div id="operator-status" class="status-line" role="status">No action taken.</div>
       </section>
-      <section class="section">
-        <h2>RBAC quick switch (demo)</h2>
+      <section class="section" aria-labelledby="demo-login-title">
+        <h2 id="demo-login-title">Demo operator login</h2>
         <div class="control-stack" style="gap:6px">
-          <input id="token-sub" placeholder="sub e.g. operator" value="demo-operator"/>
-          <select id="token-role"><option>viewer</option><option selected>operator</option><option>supervisor</option><option>admin</option><option>auditor</option></select>
-          <input id="token-bootstrap" type="password" autocomplete="off" placeholder="Bootstrap token when RBAC is enabled"/>
+          <label for="login-email" class="mono">Email</label>
+          <input id="login-email" type="email" autocomplete="username" value="gedeon@aitx.com" placeholder="operator@example.com"/>
+          <label for="login-password" class="mono">Password</label>
+          <input id="login-password" type="password" autocomplete="current-password" placeholder="Demo password"/>
           <div class="row">
-            <button onclick="getTokenAs()">Get token as role</button>
-            <button onclick="setAuthToken(prompt('Paste JWT'))">Set token</button>
+            <button class="primary" onclick="loginWithEmail()">Sign in</button>
+            <button onclick="clearAuthToken()">Sign out</button>
           </div>
-          <button onclick="clearAuthToken()">Clear in-memory token</button>
-          <div id="auth-status" class="status-line mono">No token set, RBAC disabled = system role</div>
+          <div id="auth-status" class="status-line mono" role="status">Public viewer mode. Sign in to run assessments or approve actions.</div>
+          <details>
+            <summary>Advanced administrator token</summary>
+            <div class="control-stack" style="margin-top:8px">
+              <input id="token-sub" placeholder="Subject" value="demo-operator"/>
+              <select id="token-role"><option>viewer</option><option>operator</option><option selected>supervisor</option><option>admin</option><option>auditor</option></select>
+              <input id="token-bootstrap" type="password" autocomplete="off" placeholder="OpenShift bootstrap token"/>
+              <button onclick="getTokenAs()">Issue token as selected role</button>
+            </div>
+          </details>
         </div>
       </section>
     </aside>
@@ -1234,7 +1243,30 @@
 
     function clearAuthToken() {
       authToken = '';
+      const password = $('login-password');
+      if (password) password.value = '';
       updateAuthPanel();
+    }
+
+    async function loginWithEmail() {
+      const email = ($('login-email')?.value || '').trim();
+      const password = $('login-password')?.value || '';
+      $('auth-status').textContent = 'Signing in…';
+      try {
+        const data = await request('/api/auth/demo-login', {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({email, password})
+        });
+        authToken = data.access_token.trim();
+        $('login-password').value = '';
+        $('auth-status').textContent = `Signed in as ${data.sub} · ${data.role} · token expires in ${data.expires_minutes / 60}h`;
+        await updateAuthPanel();
+        await autoRefreshTick();
+      } catch (e) {
+        authToken = '';
+        $('auth-status').textContent = 'Sign-in failed: '+e.message;
+      }
     }
 
     async function getTokenAs() {
@@ -1253,7 +1285,7 @@
     }
 
     async function updateAuthPanel() {
-      $('auth-status').textContent = authToken ? 'Token present in memory for this page only' : 'No token set; RBAC-disabled demo uses the internal system actor';
+      if (!authToken) $('auth-status').textContent = 'Public viewer mode. Sign in to run assessments or approve actions.';
       try {
         const me = await request('/api/auth/me');
         $('auth-panel').innerHTML = `<div class="security-item"><span>${escapeHtml(me.sub)}<br><small>role ${escapeHtml(me.role)} is_system ${me.is_system} rbac_enabled ${me.rbac_enabled}</small></span><span class="verdict ${me.is_system?'verified':'allow'}">${escapeHtml(me.role)}</span></div>`;
@@ -1397,6 +1429,8 @@
     window.refreshAudit = refreshAudit;
     window.generateAfterAction = generateAfterAction;
     window.setAuthToken = setAuthToken;
+    window.loginWithEmail = loginWithEmail;
+    window.clearAuthToken = clearAuthToken;
     window.getTokenAs = getTokenAs;
     window.ensureMap = ensureMap;
     window.renderMap = renderMap;
