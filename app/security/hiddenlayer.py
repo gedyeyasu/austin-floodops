@@ -87,6 +87,15 @@ def _fired_signals(signals: dict[str, Any]) -> list[str]:
     return fired
 
 
+def _is_authentication_failure(exc: Exception) -> bool:
+    """Recognize provider authentication failures without surfacing secret-bearing responses."""
+    response = getattr(exc, "response", None)
+    if getattr(response, "status_code", None) in {401, 403}:
+        return True
+    message = str(exc).lower()
+    return any(marker in message for marker in ("unauthorized", "invalid_client", "invalid client", "error code: 401", "error code: 403"))
+
+
 async def evaluate_interaction_v2(
     *,
     client_id: str,
@@ -192,6 +201,10 @@ async def evaluate_interaction_v2(
     except ImportError as exc:
         raise HiddenLayerUnavailable(f"hiddenlayer-sdk not installed: {exc}") from exc
     except Exception as exc:
+        if _is_authentication_failure(exc):
+            raise HiddenLayerUnavailable(
+                "HiddenLayer authentication failed. Rotate the client ID and client secret; hackathon credentials expire after 72 hours."
+            ) from exc
         # If SDK fails, try to extract if it's a detection that should block
         err_str = str(exc).lower()
         if "prompt_injection" in err_str or "blocked" in err_str or "threat" in err_str:
