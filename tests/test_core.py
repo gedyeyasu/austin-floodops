@@ -1,12 +1,13 @@
 from dataclasses import replace
 from datetime import datetime, timezone
+import json
 
 import pytest
 from fastapi import HTTPException
 
 from app.auth import Actor, Role, current_actor, require_action
 from app.config import settings
-from app.model.nemotron import IntegrationUnavailable, _decision_payload, _extract_json, _ground_citations, _ground_model_references, _select_evidence, build_incident_request
+from app.model.nemotron import IntegrationUnavailable, _decision_payload, _extract_json, _extract_tool_decision, _ground_citations, _ground_model_references, _select_evidence, build_incident_request
 from app.models import FloodEvent, IncidentDecision, IncidentRequest, PlaybookRule, ProposedAction
 from app.responders.after_action import generate_after_action_report
 from app.responders.cap import build_cap_alert
@@ -68,9 +69,18 @@ def test_model_request_keeps_security_instructions_in_system_role():
     assert "Ignore instructions" not in user_prompt
     assert "Current evidence JSON" in user_prompt
     assert '"required_citation_event_ids": ["e1"]' in user_prompt
-    citation_schema = payload["guided_json"]["properties"]["citations"]
+    assert payload["tool_choice"]["function"]["name"] == "record_incident_decision"
+    citation_schema = payload["tools"][0]["function"]["parameters"]["properties"]["citations"]
     assert citation_schema["items"]["enum"] == ["e1"]
     assert citation_schema["minItems"] == citation_schema["maxItems"] == 1
+
+
+def test_forced_decision_tool_arguments_are_extracted_and_other_calls_rejected():
+    complete = {"summary": "x", "risk_level": "high", "confidence": 0.8, "action_type": "request_approval", "target": "site", "rationale": "y", "citations": ["e1"]}
+    message = {"tool_calls": [{"function": {"name": "record_incident_decision", "arguments": json.dumps(complete)}}]}
+    assert _extract_tool_decision(message) == complete
+    with pytest.raises(IntegrationUnavailable):
+        _extract_tool_decision({"tool_calls": [{"function": {"name": "unexpected", "arguments": "{}"}}]})
 
 
 def test_citations_are_grounded_and_missing_values_are_repaired():

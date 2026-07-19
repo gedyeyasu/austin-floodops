@@ -157,6 +157,22 @@ def _extract_json(content: str) -> dict[str, Any]:
     return value
 
 
+def _extract_tool_decision(message: dict[str, Any]) -> dict[str, Any]:
+    """Extract only the forced Austin FloodOps decision function arguments."""
+    tool_calls = message.get("tool_calls")
+    if not isinstance(tool_calls, list) or len(tool_calls) != 1:
+        raise IntegrationUnavailable("Nemotron did not return the required decision function call")
+    function = tool_calls[0].get("function") if isinstance(tool_calls[0], dict) else None
+    if not isinstance(function, dict) or function.get("name") != "record_incident_decision":
+        raise IntegrationUnavailable("Nemotron returned an unexpected function call")
+    arguments = function.get("arguments")
+    if isinstance(arguments, dict):
+        return arguments
+    if not isinstance(arguments, str):
+        raise IntegrationUnavailable("Nemotron function arguments were not JSON")
+    return _extract_json(arguments)
+
+
 def _decision_payload(value: dict[str, Any]) -> dict[str, Any] | None:
     """Accept the documented object or a small set of common provider wrappers."""
     required = {"summary", "risk_level", "confidence", "action_type", "target", "rationale", "citations"}
@@ -238,7 +254,6 @@ def build_incident_request(*, model: str, events: list[FloodEvent], scenario_id:
                 "items": {"type": "string", "enum": required_citations},
                 "minItems": len(required_citations),
                 "maxItems": len(required_citations),
-                "uniqueItems": True,
             },
         },
         "required": ["summary", "risk_level", "confidence", "action_type", "target", "rationale", "citations"],
@@ -254,14 +269,22 @@ def build_incident_request(*, model: str, events: list[FloodEvent], scenario_id:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": _prompt(events, scenario_id, memory_context)},
         ],
-        "temperature": 0.0,
-        "top_p": 1.0,
+        # NVIDIA recommends these sampling values for Nemotron tool calling.
+        "temperature": 0.6,
+        "top_p": 0.95,
         "max_tokens": 4096,
         "stream": False,
-        # NVIDIA recommends guided_json over unconstrained JSON mode. The
-        # citation enum binds every returned reference to this request's exact
-        # evidence identifiers before our own grounding check runs.
-        "guided_json": decision_schema,
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "record_incident_decision",
+                    "description": "Return one grounded, reversible, approval-gated Austin FloodOps incident decision.",
+                    "parameters": decision_schema,
+                },
+            }
+        ],
+        "tool_choice": {"type": "function", "function": {"name": "record_incident_decision"}},
         "chat_template_kwargs": {"enable_thinking": False},
     }
 
@@ -308,19 +331,14 @@ async def assess_incident(
             try:
                 raw_response = response.json()
                 message = raw_response["choices"][0]["message"]
-                content = message.get("content") or message.get("reasoning_content")
-                if isinstance(content, list):
-                    content = "".join(str(item.get("text", item)) if isinstance(item, dict) else str(item) for item in content)
-                if not isinstance(content, str):
-                    raise TypeError("message content is not text")
-                parsed = _extract_json(content)
+                parsed = _extract_tool_decision(message)
                 result = _validated_decision_payload(parsed)
                 validated_citations, citation_source = _ground_model_references(result, events)
                 if citation_source is None:
                     raise IntegrationUnavailable("Nemotron did not supply the required unique grounded citations")
                 break
             except (IntegrationUnavailable, KeyError, IndexError, TypeError, ValueError) as exc:
-                contract_error = exc if isinstance(exc, IntegrationUnavailable) else IntegrationUnavailable("NVIDIA response did not contain message content")
+                contract_error = exc if isinstance(exc, IntegrationUnavailable) else IntegrationUnavailable("NVIDIA response did not contain valid decision function arguments")
                 if attempt == 1:
                     raise contract_error from exc
                 # Retry the already security-scanned request unchanged. A new
