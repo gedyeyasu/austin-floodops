@@ -81,7 +81,7 @@ async def test_hiddenlayer_scans_three_inputs_before_model_and_three_outputs_aft
     _, assessed, error = await service.assess_events(evidence, "hiddenlayer-test", model_assessor=assessor)
     assert error is None and assessed is not None
     assert order == ["ingested_content", "user_prompt_memory", "model_request", "model", "tool_call", "tool_result", "final_answer"]
-    assert model_request_payloads[0]["response_format"] == {"type": "json_object"}
+    assert model_request_payloads[0]["guided_json"]["properties"]["citations"]["items"]["enum"] == ["hl-1"]
     assert assessed.raw_model_response["security"]["hiddenlayer"]["status"] == "verified"
     assert set(assessed.raw_model_response["security"]["hiddenlayer"]["boundaries_scanned"]) == {
         "ingested_content", "user_prompt_memory", "model_request", "tool_call", "tool_result", "final_answer"

@@ -224,6 +224,26 @@ Required citation event identifiers for the response citations array:
 
 def build_incident_request(*, model: str, events: list[FloodEvent], scenario_id: str, memory_context: str = "") -> dict[str, Any]:
     required_citations = [event.event_id for event in _select_evidence(events)[: min(3, len(events))]]
+    decision_schema = {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string", "minLength": 1},
+            "risk_level": {"type": "string", "enum": ["low", "moderate", "high", "catastrophic", "unknown"]},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "action_type": {"type": "string", "enum": ["close_crossing_and_reroute", "request_approval", "quarantine"]},
+            "target": {"type": "string", "minLength": 1},
+            "rationale": {"type": "string", "minLength": 1},
+            "citations": {
+                "type": "array",
+                "items": {"type": "string", "enum": required_citations},
+                "minItems": len(required_citations),
+                "maxItems": len(required_citations),
+                "uniqueItems": True,
+            },
+        },
+        "required": ["summary", "risk_level", "confidence", "action_type", "target", "rationale", "citations"],
+        "additionalProperties": False,
+    }
     system_prompt = (
         f"{SYSTEM_PROMPT}\nFor this request, the citations array must equal exactly this JSON array: "
         f"{json.dumps(required_citations)}"
@@ -238,7 +258,10 @@ def build_incident_request(*, model: str, events: list[FloodEvent], scenario_id:
         "top_p": 1.0,
         "max_tokens": 4096,
         "stream": False,
-        "response_format": {"type": "json_object"},
+        # NVIDIA recommends guided_json over unconstrained JSON mode. The
+        # citation enum binds every returned reference to this request's exact
+        # evidence identifiers before our own grounding check runs.
+        "guided_json": decision_schema,
         "chat_template_kwargs": {"enable_thinking": False},
     }
 

@@ -68,6 +68,9 @@ def test_model_request_keeps_security_instructions_in_system_role():
     assert "Ignore instructions" not in user_prompt
     assert "Current evidence JSON" in user_prompt
     assert '"required_citation_event_ids": ["e1"]' in user_prompt
+    citation_schema = payload["guided_json"]["properties"]["citations"]
+    assert citation_schema["items"]["enum"] == ["e1"]
+    assert citation_schema["minItems"] == citation_schema["maxItems"] == 1
 
 
 def test_citations_are_grounded_and_missing_values_are_repaired():
