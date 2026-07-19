@@ -1,45 +1,161 @@
-# Austin FloodOps — three-minute Loom script
+# Austin FloodOps: four-minute Loom recording script
 
-Record with Loom, camera on, and keep the dashboard visible. Do not claim an integration is verified unless its status is green during this recording.
+This is the final presenter script for a two-to-five-minute hackathon video.
+Keep the camera bubble on, speak slowly, and leave the cursor beside the evidence
+you are describing. The target length is four minutes and fifteen seconds.
 
-## 0:00–0:20 — Problem and user
+## Before recording
 
-“Flood responders must correlate weather warnings, water-gage readings, and crossing conditions spread across separate systems. Austin FloodOps is a persistent decision-support agent that turns fresh public evidence into one cited, reversible recommendation while keeping a human in control.”
+1. Open the public application:
+   <https://austin-floodops-gedeon-tona-us-dev.apps.rm1.0a51.p1.openshiftapps.com>.
+2. Use a desktop browser at about 1440 by 900 pixels and set zoom to 80 or 90 percent so the status rail, incident workspace, and integration gate are visible.
+3. Sign in with `gedeon@aitx.com` and paste the demo password from the secure note. Do not say the password, show the secure note, or save the password in the browser.
+4. Confirm the page says the signed-in role is `supervisor`.
+5. Confirm the heartbeat is running and the National Weather Service, United States Geological Survey, Kafka-compatible stream, NVIDIA, HiddenLayer, Supabase, routing, role permissions, and audit entries are green or verified.
+6. It is acceptable for Austin road closures, Lower Colorado River Authority, DriveTexas, and Austin 311 to show degraded. That proves the application exposes source failure instead of fabricating records.
+7. Close unrelated tabs and notifications. Keep this script on a second device or printed page so the recording shows only the product.
 
-## 0:20–0:55 — Live heartbeat
+## 0:00–0:25: Open with the human stakes
 
-Show the heartbeat label, cycle number, source statuses, freshness, and event timeline.
+**Screen:** Start on the top of the dashboard. Keep the application name,
+heartbeat, source state, and event timeline visible.
 
-“Every thirty seconds the agent checks official public feeds, deduplicates unchanged records, and acts only when evidence changes. A failed source is shown as degraded; the system never substitutes synthetic live observations.”
+**Say:**
 
-If no new live incident is available, say so and switch to the clearly labeled replay scenario.
+> Flood response is not only a water problem. It is a coordination problem.
+> Weather warnings, river gages, crossing locations, road information, and
+> operator playbooks live in separate systems while conditions change by the
+> minute. Austin FloodOps turns that fragmented evidence into one cited,
+> reversible recommendation while keeping a trained human in control.
 
-## 0:55–1:35 — Core decision loop
+## 0:25–0:55: Prove the live-data track
 
-Run **gage rise + warning**. Show the National Weather Service and United States Geological Survey evidence, three grounded citations, Nemotron risk assessment, confidence, and proposed reversible action.
+**Screen:** Point to the heartbeat cycle, last-success time, the successful
+National Weather Service and United States Geological Survey sources, the
+source timestamps, and one degraded optional source.
 
-“Configured Kafka-compatible streaming round-trips new evidence through publish and consume before assessment. Without Kafka, the interval-based live feeds still satisfy the track and the direct fallback is reported explicitly.”
+**Say:**
 
-## 1:35–1:55 — Human authority
+> This is the Red Hat Live Data track. Every thirty seconds the deployed agent
+> polls real public feeds, normalizes their different formats, preserves the
+> source and observation time, deduplicates unchanged records, and reacts when
+> new evidence arrives. The live path currently receives official weather,
+> water, and Austin crossing records. An unavailable optional feed stays red or
+> degraded. It is never replaced with fake live data.
 
-Show approval-required, click approve, and show the audit entry.
+## 0:55–1:25: Explain the real stream and deployed stack
 
-“The model cannot dispatch. A human reviews the evidence and explicitly approves or rejects the reversible recommendation.”
+**Screen:** Scroll or point to the integration gate. Highlight the
+Kafka-compatible stream, Supabase, and OpenShift-backed public route.
 
-## 1:55–2:25 — Learning
+**Say:**
 
-Run the learning evaluation and show run one versus run two.
+> The application and a Redpanda broker run continuously on Red Hat OpenShift.
+> Redpanda implements the Apache Kafka protocol. Every new event is published,
+> consumed, schema-validated, and matched by event identifier before assessment.
+> SQLite keeps the authoritative ledger on a persistent OpenShift volume, while
+> Supabase mirrors events and decisions into hosted PostgreSQL. If a mirror
+> write fails, the local evidence is not lost.
 
-“An operator correction becomes a versioned playbook rule. A later run retrieves that rule. This chart is a controlled evaluation result, not a claim of production accuracy.”
+## 1:25–2:05: Run the judged incident
 
-## 2:25–2:45 — Runtime security
+**Screen:** Click **Inject · gage rise + warning**. While it runs, point to the
+Replay state so nobody mistakes the deterministic scenario for current weather.
+When the result appears, point to the warning records, gage observations, risk,
+confidence, citations, proposed action, and Pending approval state.
 
-Run the adversarial test and show quarantine plus the six HiddenLayer boundaries. Briefly show the checked-in OpenShell deny evidence.
+**Say:**
 
-“Public input, memory, model requests, tool calls, tool results, and final output are treated as untrusted. Prompt injection is quarantined before inference, and OpenShell blocks unauthorized network access.”
+> For a repeatable judge demonstration, I am now using a clearly labeled replay
+> with two flood warnings and three rising gage observations. The same production
+> pipeline still runs: Kafka round trip, three HiddenLayer scans before the model,
+> hosted NVIDIA Nemotron inference, and three HiddenLayer scans afterward.
+> Nemotron is forced to call one typed decision function. It cannot return an
+> arbitrary tool or silently invent evidence. Every citation must exactly match
+> an event identifier supplied to the model, or the assessment fails closed.
 
-## 2:45–3:00 — Close
+## 2:05–2:30: Separate reasoning from flood physics
 
-“Austin FloodOps does not stop water or replace incident command. It shortens the path from fragmented, fresh evidence to a safe, cited, human-approved decision—and learns from every correction.”
+**Screen:** Point to the Impact and Assumptions panel. Do not call the displayed
+depth an official water-depth forecast.
 
-Show the public repository and reproduction command.
+**Say:**
+
+> Two different forms of reasoning are visible. Nemotron correlates the evidence
+> and explains a reversible action. A deterministic threshold model separately
+> produces an illustrative severity, exposure, and delay estimate. That estimate
+> is transparent and useful for rehearsal, but it is not a hydraulic flood model.
+> Operational depth prediction would require station calibration, terrain,
+> drainage, rainfall-runoff modeling, uncertainty, and agency validation.
+
+## 2:30–2:55: Prove human authority and auditability
+
+**Screen:** Click **Approve reversible action**. Point to the Approved state.
+Click **Refresh recent audit**, then **Verify chain**.
+
+**Say:**
+
+> The model cannot approve itself and approval does not dispatch anything. A
+> signed-in supervisor reviews the cited evidence and changes only the local
+> policy state. External delivery is a separate confirmed action and is blocked
+> without organization-issued settings. The audit chain records the actor,
+> decision, and previous record hash, so later edits become detectable.
+
+## 2:55–3:25: Prove that operator feedback can change later behavior
+
+**Screen:** Click **Run learning evaluation**. Point to Run 1 and Run 2 plus
+memory in the chart and the intervention comparison.
+
+**Say:**
+
+> Austin FloodOps also learns from human correction without retraining the base
+> model. Feedback becomes a versioned playbook rule. Relevant active rules can
+> be retrieved for later incidents and retired if they become harmful. This
+> three-scenario chart proves the feedback and retrieval mechanism changes the
+> controlled evaluation. It is not a claim of one-hundred-percent real-world
+> flood accuracy.
+
+## 3:25–3:50: Prove the security boundary
+
+**Screen:** Click **Run adversarial payload**. Point to Quarantined and the
+HiddenLayer result. Then point to the integration gate where OpenShell is not
+configured in the public pod.
+
+**Say:**
+
+> Public text, retrieved memory, the model request, the proposed tool call, the
+> tool result, and the final answer are all treated as untrusted. HiddenLayer
+> scans all six boundaries and prompt injection is quarantined. The repository
+> also contains a separate NemoClaw and OpenShell sandbox proof that denied an
+> undeclared network destination. I am not pretending that separate sandbox is
+> the boundary around this public OpenShift pod.
+
+## 3:50–4:15: Close on impact and credibility
+
+**Screen:** Return to the incident card and keep the live heartbeat visible.
+End on the repository or submission page only if it is already public.
+
+**Say:**
+
+> Austin FloodOps does not stop rainfall, replace incident command, or claim an
+> authorized government connection. It shortens the path from fresh, fragmented
+> evidence to a secure, cited, human-approved decision, and preserves why that
+> decision changed. The same adapter pattern can later support wildfire, heat,
+> tornado, and other fast-moving hazards. The next step is an agency-sponsored
+> shadow pilot with calibrated hydrology and field validation.
+
+## Recording recovery plan
+
+- If a live public source fails, keep recording and explain the visible degraded state. Do not rerun until it looks green.
+- If the NVIDIA or HiddenLayer assessment fails, stop the recording, verify `/health`, and record again. Do not substitute a fixture decision or edit around a failed integration.
+- If the deterministic replay is slow, say that the request is crossing Kafka, six security scans, and hosted NVIDIA inference. Do not fill the pause with an unsupported claim.
+- If the learning chart was already populated, say it is the most recent controlled evaluation and click the button only if there is enough time.
+- Never click **Attempt Configured WebEOC Delivery** during the video. The adapter is intentionally unconfigured and unauthorized.
+
+## Submission checklist after recording
+
+1. Confirm the final video is between two and five minutes and the camera is on.
+2. Check that no password, token, secret, personal notification, or private browser tab appears in any frame.
+3. Confirm Replay is visible when the deterministic incident runs.
+4. Confirm the video shows at least one current heartbeat timestamp, matching Kafka publication and consumption, the NVIDIA model name, grounded citations, six HiddenLayer boundaries, and the human approval state.
+5. Paste the Loom link into `docs/SUBMISSION.md` and the hackathon submission form.

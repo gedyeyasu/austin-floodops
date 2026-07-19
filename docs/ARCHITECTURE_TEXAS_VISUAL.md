@@ -18,10 +18,10 @@ flowchart TD
     STREAM -->|no| DIRECT["Explicit direct path"]
     KAFKA --> SECURITY["HiddenLayer security boundaries"]
     DIRECT --> SECURITY
-    SECURITY --> MODEL["NVIDIA Nemotron\ntyped recommendation"]
+    SECURITY --> MODEL["NVIDIA Nemotron\nforced decision tool call"]
     MODEL --> GROUND["Ground every citation in input evidence"]
     GROUND --> POLICY["Deterministic approval policy"]
-    POLICY --> LEDGER["SQLite ledger\noptional Supabase mirror"]
+    POLICY --> LEDGER["Persistent SQLite ledger\nverified Supabase mirror"]
     LEDGER --> HUMAN["Human review\napprove · reject · correct"]
     HUMAN --> MEMORY["Versioned playbook memory"]
     MEMORY -. relevant active rules .-> MODEL
@@ -55,11 +55,28 @@ sequenceDiagram
 
 | Tool | Work it performs | Proof in the product |
 |---|---|---|
-| NVIDIA Nemotron | Correlates live evidence into one typed recommendation | Decision contains model name, raw response metadata, rationale, and grounded citations |
+| NVIDIA Nemotron | Correlates live evidence by calling a constrained decision function | Decision contains model name, tool arguments, rationale, and exact grounded citations |
 | HiddenLayer Runtime Security | Scans untrusted evidence and model boundaries | Security panel shows each real boundary outcome; suspicious content is quarantined |
 | NemoClaw and OpenShell | Restricts filesystem, process, and network access when launched in that sandbox | Checked-in policy and deny evidence; not claimed when running plain Docker Compose |
-| Redpanda using the Kafka protocol | Provides the local live event backbone | `make stream-smoke` must publish and consume the same event identifier |
-| Supabase | Optionally mirrors the local ledger | Runtime probe and best-effort writes; SQLite remains authoritative |
+| Redpanda using the Kafka protocol | Provides the live event backbone locally and on OpenShift | Runtime state and `make stream-smoke` prove publication and consumption of the same event identifier |
+| Supabase | Mirrors the local ledger into hosted PostgreSQL | Production runtime probe and best-effort writes; SQLite remains authoritative |
+
+## Deployed topology
+
+```mermaid
+flowchart LR
+    BROWSER["Browser\npublic viewer or signed-in operator"] --> ROUTE["OpenShift secure route"]
+    ROUTE --> APP["FastAPI pod\nheartbeat + dashboard + policy"]
+    APP <--> BROKER["Redpanda pod\nKafka-compatible topic"]
+    APP --> PVC1["SQLite persistent volume"]
+    BROKER --> PVC2["Stream persistent volume"]
+    APP --> NVIDIA["Hosted NVIDIA Nemotron"]
+    APP --> HIDDEN["HiddenLayer runtime scans"]
+    APP --> SUPABASE["Supabase PostgreSQL mirror"]
+```
+
+OpenShift Secrets provide server credentials. Anonymous users are read-only;
+the demo login issues a supervisor token held only in browser memory.
 
 ## Demo versus operational status
 

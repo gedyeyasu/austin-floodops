@@ -2,6 +2,15 @@
 
 This is a future hardening backlog, not a statement that the current prototype is production ready.
 
+## Current starting point
+
+The hackathon build already runs as a single-instance OpenShift deployment with
+a persistent application ledger, a persistent Kafka-compatible broker,
+server-side secrets, read-only anonymous access, authenticated supervisor
+actions, a Supabase mirror, and runtime probes. Operationalization is therefore
+an upgrade from a working vertical slice, not a proposal to replace mock
+components.
+
 ## Evidence and hydrology
 
 - Establish supported source contracts and monitor schema changes.
@@ -15,6 +24,9 @@ This is a future hardening backlog, not a statement that the current prototype i
 - Add a dead-letter topic, replay tooling, lag alerts, and idempotent recovery tests.
 - Run multi-zone storage, backups, restore drills, and load tests.
 - Define service-level objectives and an incident-response rotation.
+- Replace the single OpenShift application and Redpanda instances with
+  multi-zone replicas, disruption budgets, broker replication, monitored
+  consumer lag, and tested failover.
 
 ## Safety and security
 
@@ -23,6 +35,10 @@ This is a future hardening backlog, not a statement that the current prototype i
 - Enable role-based access control by default with organization identity.
 - Require two-person approval for consequential external delivery.
 - Complete accessibility, privacy, records-retention, and legal reviews.
+- Replace the shared demo account with organization identity, short-lived
+  sessions, multi-factor authentication, and agency-managed role assignments.
+- Run the production worker inside an approved OpenShell or equivalent runtime
+  boundary and independently validate the HiddenLayer fail-closed policy.
 
 ## Agency and vendor integration
 

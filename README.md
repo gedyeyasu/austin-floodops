@@ -23,7 +23,7 @@ NWS Alerts + USGS Gage + Austin Crossings + Road Closures
             |
     HiddenLayer v2 SDK  (6 boundary scans)
             |
-    NVIDIA Nemotron 3 Nano  (structured JSON incident decision)
+    NVIDIA Nemotron 3 Nano  (forced decision tool call)
             |
     Policy Gate  (approval-required, reversible-only, quarantine-safe)
             |
@@ -36,7 +36,7 @@ NWS Alerts + USGS Gage + Austin Crossings + Road Closures
 
 | Integration | Status | How It's Used |
 |---|---|---|
-| **NVIDIA Nemotron 3 Nano** | Runtime-verified | Structured incident assessment via the hosted NVIDIA endpoint; the gate turns verified only after a successful decision |
+| **NVIDIA Nemotron 3 Nano** | Runtime-verified | Hosted NVIDIA inference is forced to call `record_incident_decision`; the application validates its typed arguments and exact evidence citations |
 | **HiddenLayer Runtime Security** | Runtime-verified | Six-boundary scan with pre-model prompt-injection quarantine; the gate reports the last real scan |
 | **NemoClaw / OpenShell** | Sandbox-only | Checked-in sandbox policy and deny evidence; Docker Compose alone does not enforce it |
 | **Kafka-compatible streaming** | Runtime-verified | Redpanda provides the Kafka protocol locally and on OpenShift; `make stream-smoke` proves publish → consume before assessment |
@@ -74,6 +74,13 @@ Open <http://127.0.0.1:8080>. The dashboard shows the integration gate, event ti
 
 ## Demo Path
 
+The production demo is available at
+<https://austin-floodops-gedeon-tona-us-dev.apps.rm1.0a51.p1.openshiftapps.com>.
+Anonymous visitors are read-only. Sign in with the shared demo operator account
+provided by the presenter, then use **Inject · gage rise + warning** for the
+deterministic judged path. The password is intentionally not stored in Git or
+printed in this documentation.
+
 ```bash
 make demo
 ```
@@ -92,8 +99,14 @@ The evaluation runs only when an operator clicks **Run learning evaluation**; lo
 make test         # Unit and service-flow tests
 make smoke        # Local API smoke: health + replay + security + configured probes
 make stream-smoke # Docker Compose Redpanda publish/consume verification on port 18081 by default
-make preflight   # Dependency status: NVIDIA, Kafka, Supabase, HiddenLayer, WebEOC, vLLM, OSRM
+make preflight    # Dependency status: NVIDIA, Kafka, Supabase, HiddenLayer, WebEOC, vLLM, OSRM
 ```
+
+The final documented build has 54 automated tests. The live OpenShift health
+gate has verified the heartbeat, National Weather Service, United States
+Geological Survey, NVIDIA, Kafka-compatible stream, Supabase, HiddenLayer,
+routing, role permissions, and the application audit chain. Optional Texas
+sources can still be degraded and are shown as such.
 
 ## Deploy on Red Hat OpenShift
 
@@ -122,7 +135,7 @@ Transport Layer Security health endpoint. See
 | `/health` | GET | Integration gate that distinguishes configured from verified |
 | `/api/auth/demo-login` | POST | Demo-only email/password login that issues an in-memory supervisor token |
 | `/api/heartbeat` | GET | Heartbeat state: cycle count, source status, last decision |
-| `/api/assess` | POST | Gather events → Nemotron assessment → policy gate → store |
+| `/api/assess` | POST | Gather events → forced Nemotron decision tool call → policy gate → store |
 | `/api/simulate` | POST | Deterministic threshold-v1 impact model |
 | `/api/evaluation/run` | POST | 3-scenario before/after comparison with accuracy/latency metrics |
 | `/api/memories` | GET | Versioned playbook rules with tags and confidence |
@@ -161,6 +174,20 @@ Transport Layer Security health endpoint. See
 4. **Memory-augmented prompt** → injected into next Nemotron assessment
 5. **Evaluation harness** → compares the baseline and memory-assisted runs without assuming improvement
 6. **Retirement** → harmful or outdated rules can be individually retired
+
+## Documentation Map
+
+- [Operator guide](docs/USER_GUIDE.md): every dashboard control, state, and safe demo path.
+- [Loom recording script](docs/LOOM_SCRIPT.md): timed screen actions and exact narration.
+- [Architecture index](docs/architecture.md) and [full explanation](docs/ARCHITECTURE_EXPLAINED.md): end-to-end data, security, model, storage, and approval flow.
+- [Visual architecture](docs/ARCHITECTURE_TEXAS_VISUAL.md): compact diagrams for a presentation.
+- [Spoken system guide](docs/SPOKEN_SYSTEM_GUIDE.md) and [plain-text narration](docs/SPOKEN_SYSTEM_NARRATION.txt): beginner-to-expert narration with example payloads and flood concepts.
+- [Deployment guide](docs/DEPLOYMENT.md): local, Docker Compose, OpenShift, authentication, and Supabase setup.
+- [Submission package](docs/SUBMISSION.md): track description, entry copy, links, and limitations.
+- [Verification evidence policy](docs/evidence/README.md): what each proof artifact establishes and what it does not.
+- [Current engineering state](docs/RESUME_STATE.md): verified production status and remaining submission work.
+- [Post-hackathon plan](docs/ENTERPRISE_PLAN.md): work required before an operational pilot.
+- [Verification plan](GSTACK_TEST_PLAN.md), [deferred scope](TODOS.md), and [hackathon decision record](HACKATHON_PLAN.md).
 
 ## Security
 
@@ -210,7 +237,7 @@ See `.env.example` for all 50+ configuration fields. Key groups:
 
 ```text
 app/
-├── main.py              # FastAPI app: 30+ routes, lifespan heartbeat
+├── main.py              # FastAPI app: 47 routes, lifespan heartbeat
 ├── config.py            # 50+ settings from env vars
 ├── models.py            # Pydantic v2: FloodEvent, IncidentDecision, PlaybookRule, etc.
 ├── service.py           # FloodOpsService orchestrator: gather → assess → approve → feedback

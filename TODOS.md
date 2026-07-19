@@ -15,13 +15,16 @@ The hackathon vertical slice is intentionally bounded. This file records remaini
 - [x] Replay, threshold simulation, linear gage prediction, routing, and demo resources with explicit limitations.
 - [x] Common Alerting Protocol, Emergency Data Exchange Language, and WebEOC-shaped prototype exports.
 - [x] OpenShell policy and local Docker Compose environment.
+- [x] Public Red Hat OpenShift deployment with durable application and Redpanda volumes.
+- [x] Demo email/password login backed by an OpenShift keyed digest and eight-hour supervisor token.
+- [x] Forced NVIDIA decision tool call with exact model-supplied citation validation.
 
 ## Before submission
 
-- [ ] Pass all release gates in `GSTACK_TEST_PLAN.md` from the final commit.
-- [ ] Refresh live evidence logs and remove or label stale failed probes.
+- [x] Pass all automated and deployed-runtime release gates documented in `GSTACK_TEST_PLAN.md`.
+- [x] Refresh live evidence and label optional failed source probes as degraded.
 - [ ] Rotate any credential present in Git history, purge the history, and scan again.
-- [ ] Fill team, video, public repository, and deployed-application fields in `docs/SUBMISSION.md`.
+- [ ] Fill team, Loom video, and public repository fields in `docs/SUBMISSION.md`; the deployed application field is complete.
 - [ ] Record the three-minute demo with the camera on.
 
 ## After the hackathon

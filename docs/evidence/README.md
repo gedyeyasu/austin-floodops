@@ -9,6 +9,25 @@ Evidence files are supporting artifacts, not permanent truth. Re-run the release
 - `end-to-end-2026-07-18.json`: Dockerized replay went through five Kafka publications and consumptions, six HiddenLayer boundaries, NVIDIA Nemotron, citation grounding, and the approval-required policy with no stream fallback.
 - `openshell-runtime-2026-07-18.json`: the real `austin-floodops` NemoClaw sandbox completed managed Nemotron inference and denied an undeclared outbound host with an OpenShell policy response.
 
+## Public deployment verification, July 18, 2026
+
+The public OpenShift `/health` and `/api/heartbeat` responses were checked after
+the final deployment. They showed a running heartbeat with zero consecutive
+failures; successful National Weather Service, United States Geological Survey,
+and Austin crossing sources; matching Kafka-compatible publication and
+consumption; verified NVIDIA, HiddenLayer, Supabase, routing, authentication,
+role permissions, and audit-chain states; and explicit degradation for the
+optional Austin road, Lower Colorado River Authority, DriveTexas, and Austin 311
+adapters.
+
+The final deterministic replay produced a hosted
+`nvidia/nemotron-3-nano-30b-a3b` decision through the forced
+`record_incident_decision` call. The application accepted only exact
+model-supplied evidence references, kept the action approval-required and
+reversible, and recorded all six HiddenLayer boundaries. Re-run these public
+checks immediately before the video; this paragraph is a dated result, not a
+permanent guarantee.
+
 ## Other checked-in artifacts
 
 The remaining logs and exports record earlier feature exercises: HiddenLayer adversarial scanning, OpenShell allow-and-deny behavior, prediction, resource-demo state, routing, and export formats. Treat them as historical until they are refreshed. Do not infer a current vendor connection or agency authorization from a file in this directory.

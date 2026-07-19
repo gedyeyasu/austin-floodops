@@ -1,6 +1,30 @@
 <!-- /autoplan restore point: /Users/gedeoneyasu/.gstack/projects/RedHatHackthon/master-autoplan-restore-20260717-182513.md -->
 # ClawOps: Self-Improving Live Incident Commander
 
+## Implementation outcome, July 18, 2026
+
+The narrowed concept shipped as **Austin FloodOps v0.3.0**. The public
+application runs on Red Hat OpenShift with an always-on thirty-second heartbeat,
+a Kafka-compatible Redpanda broker, a persistent SQLite ledger, and a remote
+Supabase mirror. The hosted NVIDIA path uses a forced
+`record_incident_decision` function call rather than free-form JavaScript Object
+Notation. Model-supplied citations are matched against the exact input evidence.
+HiddenLayer completed three scans before inference and three scans after it.
+Consequential actions still require an authenticated human and remain separate
+from responder delivery.
+
+Production verification covered 54 automated tests plus live heartbeat,
+National Weather Service, United States Geological Survey, Austin crossing,
+Kafka, NVIDIA, HiddenLayer, Supabase, routing, authentication, and audit-chain
+checks. Optional Austin road, Lower Colorado River Authority, DriveTexas, and
+Austin 311 sources are currently degraded and honestly displayed. The deployed
+application does not run inside NemoClaw or OpenShell; the repository contains a
+separate sandbox proof and must not present it as the public runtime.
+
+The rest of this file is the original gstack planning and review record. Where
+a plan-era statement differs from the implementation outcome above, the outcome
+and the runtime health endpoint are authoritative.
+
 ## Implementation checkpoint: Kafka/OpenShell slice
 
 The current branch has a real optional Kafka producer/consumer in `app/streaming/kafka.py`, an HTTP probe at `/api/integrations/kafka/probe`, and an OpenShell policy artifact at `openshell/austin-floodops.yaml`. Broker errors are converted to a typed degraded state; no broker or sandbox claim is considered verified until the smoke probe fires against the configured service.
@@ -21,13 +45,12 @@ verified while unconfigured. The OpenShell artifact now uses the current
 policy-v1 sections (`filesystem_policy`, `landlock`, `process`, and
 `network_policies`) and leaves inference credentials provider-managed.
 
-The deployment decision is explicit: Supabase is the managed ledger and
-Realtime surface, not the application runtime. The API/agent runs in a
-NemoClaw/OpenShell container (Brev is the preferred NVIDIA-hosted path), with
-SQLite retained for offline replay. `supabase/schema.sql` is mirrored under
-`supabase/migrations/` for the linked GitHub deployment; the Supabase gate
-stays unverified until one real event and one decision are written and read
-back with server-side credentials.
+The implemented deployment uses OpenShift for the Python application and
+Redpanda runtime. Supabase is a remote PostgreSQL mirror, not the application
+runtime. SQLite remains authoritative and durable on an OpenShift persistent
+volume. `supabase/schema.sql` is mirrored under `supabase/migrations/` for the
+linked project. NemoClaw and OpenShell remain a separately verified sandbox
+proof rather than the public deployment boundary.
 Hackathon: AITX Community x NVIDIA Claw Agent Hackathon, July 17-19, 2026
 Primary track: Red Hat Live Data
 Secondary qualification targets: Recursive Intelligence, HiddenLayer Runtime Security, Best Use of vLLM, Best Use of NemoClaw + OpenShell, Best Use of Nemotron, Most Commercializable Hack

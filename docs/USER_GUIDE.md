@@ -4,6 +4,16 @@ Austin FloodOps is a flood decision-support prototype. It helps an operator corr
 
 ## Start the system
 
+Public hackathon application:
+
+<https://austin-floodops-gedeon-tona-us-dev.apps.rm1.0a51.p1.openshiftapps.com>
+
+Anonymous visitors can read the dashboard but cannot run assessments or change
+decisions. Sign in with the presenter-provided demo account to receive an
+eight-hour supervisor token kept only in browser memory. The shared email is
+`gedeon@aitx.com`; the password is deliberately stored outside Git and this
+guide.
+
 Local application:
 
 ```bash
@@ -41,6 +51,11 @@ The left timeline lists observed or replay evidence. Each card shows its source,
 
 Replay buttons load deterministic incidents for presentation and automated evaluation. Replay records are clearly labeled. They are not presented as current conditions.
 
+For the main presentation, use **Inject · gage rise + warning**. The request
+still uses the deployed Redpanda stream, all six HiddenLayer boundaries, and
+hosted NVIDIA inference. Only the evidence itself comes from the labeled replay
+fixture so the judge sees the same incident every time.
+
 ### Incident workspace
 
 After assessment, the center workspace shows:
@@ -53,7 +68,10 @@ After assessment, the center workspace shows:
 - the heuristic impact estimate and its assumptions;
 - map, prediction, routing, and audit views.
 
-The model recommendation is advisory. The policy starts at approval required. Approve and Reject change the local decision state and append an audit entry.
+The model recommendation is advisory. NVIDIA is forced to call the typed
+`record_incident_decision` function, and every citation is checked against the
+exact evidence supplied to the model. The policy starts at approval required.
+Approve and Reject change the local decision state and append an audit entry.
 
 ### Learning panel
 
@@ -63,7 +81,7 @@ Run learning evaluation only when you want to execute the three replay scenarios
 
 ### Security console
 
-The console distinguishes configured, verified, degraded, blocked, and not configured states. HiddenLayer results appear only after a real scan. OpenShell restrictions count only when the application is actually launched through the OpenShell sandbox. The adversarial test deliberately submits unsafe text and should return quarantined.
+The console distinguishes configured, verified, degraded, blocked, and not configured states. HiddenLayer results appear only after a real scan. The public deployment currently verifies all six HiddenLayer boundaries. OpenShell restrictions count only when the application is actually launched through the OpenShell sandbox; the current OpenShift pod correctly shows OpenShell as not configured. The adversarial test deliberately submits unsafe text and should return quarantined.
 
 ### Integration gate
 
@@ -108,6 +126,9 @@ The hackathon project is not an authorized Texas Division of Emergency Managemen
 8. Run the adversarial security test and show quarantine.
 9. Show the Kafka probe result from `make stream-smoke`.
 10. End with the boundary: working technical prototype now, agency authorization and hydrologic calibration next.
+
+For the final timed narration, screen actions, recovery plan, and claims to
+avoid, use [LOOM_SCRIPT.md](LOOM_SCRIPT.md).
 
 ## Useful verification commands
 

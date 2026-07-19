@@ -1,5 +1,17 @@
 # Austin FloodOps deployment
 
+## Live hackathon application
+
+<https://austin-floodops-gedeon-tona-us-dev.apps.rm1.0a51.p1.openshiftapps.com>
+
+The deployed topology has been verified end to end: the heartbeat is running,
+the core public sources are returning observed records, Redpanda is publishing
+and consuming matching event identifiers, NVIDIA Nemotron is returning a forced
+decision function call, HiddenLayer is completing six scans, Supabase is
+accepting mirror traffic, and role permissions and the audit chain are healthy.
+Optional Austin road, Lower Colorado River Authority, DriveTexas, and Austin 311
+sources are currently degraded and remain visible in the interface.
+
 ## Recommended hackathon deployment
 
 Use Red Hat OpenShift for the application runtime and the internal Kafka-compatible stream. Keep Supabase as the remote PostgreSQL mirror for events, decisions, and operator feedback.
@@ -15,6 +27,12 @@ The OpenShift deployment contains:
 - one OpenShift binary build so the private GitHub repository does not need to be made public or given to the cluster.
 
 The single Redpanda broker is a real Kafka-compatible stream, not a mock. It is intentionally a hackathon-sized deployment rather than a fault-tolerant production cluster. A production government deployment would use at least three brokers across separate worker nodes or an approved managed Kafka-compatible service.
+
+The application persistent volume is mounted at `/app/state`. Replay fixtures
+remain at `/app/data/replay` inside the image, so mounting durable state cannot
+hide the demo scenarios. Redpanda writes its generated configuration and data
+to its persistent volume because OpenShift assigns an arbitrary non-root user
+and does not allow writes to the image's `/etc/redpanda` directory.
 
 ## Deploy
 
@@ -39,6 +57,19 @@ The single Redpanda broker is a real Kafka-compatible stream, not a mock. It is 
 
 The script uploads the local source as a binary build, waits for Redpanda and the application, discovers the public route, and requires the `/health` endpoint to return successfully.
 
+After deployment, verify the exact public state:
+
+```bash
+APP_URL='https://austin-floodops-gedeon-tona-us-dev.apps.rm1.0a51.p1.openshiftapps.com'
+curl --fail --silent --show-error "$APP_URL/health"
+curl --fail --silent --show-error "$APP_URL/api/heartbeat"
+oc get pods
+```
+
+The application and Redpanda pods should both report ready with zero restarts.
+The health response distinguishes `configured` from `verified`; only a successful
+runtime operation changes an integration to verified.
+
 ## Authentication for the public route
 
 The OpenShift deployment forces role-based access control on. Visitors without a token receive the `viewer` role: they can inspect public source evidence and existing decisions but cannot run NVIDIA inference, simulations, approvals, feedback, exports, or responder delivery.
@@ -57,7 +88,12 @@ For a shareable hackathon demonstration, the deploy script can create a separate
 DEMO_LOGIN_EMAIL='operator@example.com' DEMO_LOGIN_PASSWORD='<demo-password>' ./scripts/deploy-openshift.sh
 ```
 
-The script stores only a keyed SHA-256 password digest in OpenShift; the independent authentication bootstrap secret is the key, so the stored digest is not a reusable plain password hash. Successful demo login issues an eight-hour `supervisor` token in browser memory. Anonymous visitors remain read-only, and failed login responses never reveal whether the email or password was incorrect.
+The script stores only a keyed SHA-256 password digest in OpenShift; the independent authentication bootstrap secret is the key, so the stored digest is not a reusable plain password hash. Successful demo login issues an eight-hour `supervisor` token in browser memory. Anonymous visitors remain read-only, and failed login responses never reveal whether the email or password was incorrect. Do not place the demo password in documentation, screenshots, the Loom narration, or Git. Give it to judges through a separate secure note.
+
+The current demo account email is `gedeon@aitx.com`. Its password is managed
+outside the repository. The public page shows a normal email/password form, and
+the operator token disappears on sign-out or page reload because it is never
+written to browser storage.
 
 ## Supabase credit
 
@@ -72,3 +108,12 @@ The Red Hat Developer Sandbox resolver may return no address for a valid project
 - **Railway trial:** quick Docker deployment, but trial credit and duration are account-specific and the application still needs durable storage and Kafka.
 
 For this hackathon, OpenShift is the best fit because it keeps the live-data agent awake, runs the tested container, hosts the real stream, and visibly uses the Red Hat sponsor platform.
+
+## Deployment boundaries
+
+- OpenShift hosts the public application and Kafka-compatible broker.
+- Supabase hosts the remote PostgreSQL mirror; it does not host the Python server.
+- NVIDIA hosts the Nemotron model endpoint used by the public application.
+- HiddenLayer scans model interactions from the public application.
+- NemoClaw and OpenShell are supported by a separate sandbox proof. They are not configured around the current OpenShift pod and must not be shown as a green deployed integration.
+- WebEOC and the generic responder webhook are unconfigured. Export previews are safe demonstrations, not agency delivery.

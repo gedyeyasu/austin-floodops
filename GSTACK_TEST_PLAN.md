@@ -15,6 +15,18 @@ This plan distinguishes automated coverage from live integration proof. A compon
 | Interface | Browser walkthrough covers loading, partial source failure, replay, model error, approval, rejection, quarantine, and offline states |
 | Secrets | Current tree and Git history are scanned; leaked credentials are rotated and purged before public release |
 
+## Final production verification, July 18, 2026
+
+- 54 automated tests passed from the final application tree.
+- The public OpenShift route returned `status: ok` over Transport Layer Security.
+- The autonomous heartbeat was running with zero consecutive failures.
+- National Weather Service, United States Geological Survey, and Austin crossing adapters returned observed records; optional Austin road, Lower Colorado River Authority, DriveTexas, and Austin 311 adapters were visibly degraded.
+- A Kafka-compatible Redpanda record was published and consumed with the same event identifier before assessment.
+- NVIDIA Nemotron called the forced `record_incident_decision` tool and supplied exact evidence citations that passed application grounding.
+- HiddenLayer completed all three pre-model and all three post-model scans. Non-blocking personally identifiable information and address findings remained visible; prompt injection was not detected on the benign run.
+- Supabase, Open Source Routing Machine routing, demo authentication, role permissions, and the application audit chain passed runtime probes.
+- NemoClaw and OpenShell are not configured inside the public OpenShift application. Separate checked-in sandbox evidence must be described as a separate proof, not as the deployed runtime.
+
 ## Automated coverage
 
 - Event normalization, citation grounding, and source provenance types.
@@ -49,3 +61,7 @@ make preflight
 ```
 
 `make demo` starts the heartbeat and opens the interface. It does not automatically mutate evaluation state; the operator starts the evaluation from the dashboard.
+
+For the hosted judged path, use the public route in `README.md`, sign in with
+the presenter-provided demo account, and run **Inject · gage rise + warning**.
+Do not display or speak the password during recording.

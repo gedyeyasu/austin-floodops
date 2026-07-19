@@ -1,6 +1,6 @@
 # Austin FloodOps: spoken system guide
 
-This guide is written as a narration. You can listen to the generated audio and use this file only when you want to see an exact payload, formula, command, or source link.
+This guide is written as a narration that can be read aloud directly or pasted into a voice conversation. Use the displayed text when you want to inspect an exact payload, formula, command, or source link.
 
 ## Chapter 1 — The one-minute explanation
 
@@ -103,7 +103,7 @@ flowchart LR
     A["Official and local data sources"] --> B["Thirty-second heartbeat"]
     B --> C["Normalize and deduplicate events"]
     C --> D["SQLite local ledger"]
-    C --> E["Optional Kafka publish"]
+    C --> E["Kafka publish, consume, and validation when configured"]
     C --> F["HiddenLayer input scan"]
     F --> G["Retrieve relevant operator rules"]
     G --> H["NVIDIA Nemotron structured assessment"]
@@ -117,11 +117,11 @@ flowchart LR
 
 When the FastAPI web server starts, it creates a heartbeat engine. FastAPI is the Python web framework exposing the page and endpoints. The heartbeat wakes every thirty seconds by default. It requests each configured source concurrently, meaning one slow source does not have to delay all others. Each source returns normalized FloodEvent objects. Stable event identifiers are used to remove duplicates. Only new events are sent through a new assessment, while all received events can be stored for the timeline.
 
-The application publishes new events to Kafka if a broker is configured. This is currently an additional publish path, not the central conveyor belt of the whole application. The assessment is still called directly from the heartbeat after collection. The code contains a real producer and consumer and a probe endpoint, but the checked-in probe evidence shows one record published and zero consumed. Present that as a proven producer connection, not a proven end-to-end consumer round trip.
+When a broker is configured, the application publishes new events to Kafka, consumes them through an isolated consumer group, validates each record again, and matches the consumed event identifiers against the published identifiers. Those consumed objects become the assessment evidence. If the broker fails, the service records a degraded stream state and uses a counted direct safety path so live evidence is not lost. The OpenShift deployment and the strict local probe both verify publication and consumption of the same event identifier.
 
 Before model reasoning, the project sends ingested evidence, retrieved memory, and the exact model request to HiddenLayer. If a prompt-injection signal fires or a configured scan cannot complete, inference does not start. After inference, it scans the proposed tool call, deterministic simulation result, and final answer. The decision is verified only when all six boundaries completed. Any missing configured output scan blocks the action, and a prompt-injection signal in model output quarantines that output after inference.
 
-The learning retriever then selects up to three active playbook rules whose words and tags overlap the current evidence. These rules are context, not executable code. The model receives a prompt containing at most the newest eight evidence items and the retrieved rules. It must return a JSON object containing summary, risk, confidence, action, target, rationale, and citations. The parser rejects unknown risk levels and unknown action types.
+The learning retriever then selects up to three active playbook rules whose words and tags overlap the current evidence. These rules are context, not executable code. The model receives a prompt containing at most the newest eight evidence items and the retrieved rules. NVIDIA Nemotron is forced to call a function named record incident decision. Its schema contains summary, risk, confidence, action, target, rationale, and citations. The parser rejects free-form output, unrelated function calls, unknown risk levels, unknown action types, and citations that are not exact input evidence identifiers.
 
 The deterministic policy evaluates the proposed action. Non-reversible actions are blocked. Quarantine is blocked from dispatch. High and catastrophic recommendations require approval. All other supported actions also remain approval-gated. Approval changes the decision's policy status to allowed, but approval does not itself send a responder message. Message delivery is a distinct, explicit call with confirmation.
 
@@ -239,14 +239,14 @@ There is another known issue. An alert titled “Flood Warning Cancelled” stil
 
 ## Chapter 8 — The Nemotron decision example
 
-The language model is not allowed to return arbitrary prose and perform arbitrary tools. The prompt asks for one structured recommendation. A representative output is:
+The language model is not allowed to return arbitrary prose or select arbitrary tools. The request forces one function named `record_incident_decision`. Representative function arguments are:
 
 ```json
 {
   "summary": "A flash flood warning overlaps a rapid gage rise in the Onion Creek watershed.",
-  "risk": "catastrophic",
+  "risk_level": "catastrophic",
   "confidence": 0.91,
-  "action": "close_crossing_and_reroute",
+  "action_type": "close_crossing_and_reroute",
   "target": "Priority low-water crossings near Onion Creek",
   "rationale": "Close vulnerable crossings temporarily and route traffic around observed flood conditions.",
   "citations": [
@@ -257,7 +257,7 @@ The language model is not allowed to return arbitrary prose and perform arbitrar
 }
 ```
 
-The parser accepts only four risk values: low, moderate, high, and catastrophic. It accepts only the defined action values. Confidence is forced into the range zero through one. The citations must refer to evidence identifiers. This creates a trust boundary: the model proposes, but application code validates.
+The parser accepts only five risk values: unknown, low, moderate, high, and catastrophic. It accepts only the defined action values. Confidence is forced into the range zero through one. The citations must be exact identifiers or provenance addresses from the supplied evidence, and up to three unique citations are required depending on the evidence count. This creates a trust boundary: the model proposes, but application code validates.
 
 The resulting IncidentDecision adds a unique incident identifier, scenario, timestamps, policy status, model name, the complete evidence list, and security metadata. A high or catastrophic proposal becomes approval required. Nothing is dispatched.
 
@@ -319,7 +319,7 @@ Run adversarial payload sends a known prompt-injection payload to the security t
 
 Reset view to run one clears the current dashboard selection and redraws baseline metrics. It does not delete events, decisions, feedback, rules, or audit entries.
 
-The quick role switch has a subject field, a role list, an optional bootstrap-secret field, Get token as role, Set token, and Clear token. Get token as role asks the server for a demonstration JSON Web Token. The server never issues its internal system role. When `ENABLE_RBAC=false`, the server treats requests as the system role, so the selector is mostly visual. When role-based access control is enabled, token minting requires independent JSON Web Token and bootstrap secrets of at least thirty-two characters. Permission checks use the explicit action-to-role table; a similarly ranked but unlisted role cannot inherit another role's authority.
+The public deployment begins in read-only viewer mode. The Demo operator login has email, password, Sign in, and Sign out controls. A valid login issues an eight-hour supervisor JSON Web Token that remains in browser memory and disappears on sign-out or reload. OpenShift stores a keyed password digest, not the plaintext password. An expandable developer role-token section still supports subject, role, bootstrap secret, token issuance, token setting, and token clearing. It is for controlled testing. The server never issues its internal system role, and explicit permissions prevent one similarly ranked role from inheriting another role's actions.
 
 ## Chapter 13 — Dashboard guided tour: decision controls
 
@@ -367,9 +367,9 @@ The integrations list distinguishes configured from verified. Configured means e
 
 NVIDIA Nemotron provides language reasoning over mixed evidence and operator rules. Its job is explanation and recommendation, not numerical flood physics.
 
-NVIDIA Inference Microservices or NVIDIA's hosted compatible endpoint provides the model-serving interface. The application sends chat-completions requests and expects structured JSON.
+NVIDIA Inference Microservices or NVIDIA's hosted compatible endpoint provides the model-serving interface. The application sends a chat-completions request with a forced function schema and accepts only valid decision-function arguments.
 
-NemoClaw and OpenShell provide the secure runtime story. The repository contains a declarative `austin-floodops` policy and evidence files from prior allow-and-deny checks. Those files must be refreshed for the submission. The local Docker Compose file by itself does not enforce the OpenShell policy.
+NemoClaw and OpenShell provide a separate secure-runtime proof. The repository contains a declarative `austin-floodops` policy and July eighteenth evidence of managed Nemotron inference plus a denied undeclared network destination. The public OpenShift application does not currently run inside that sandbox and correctly reports the integration as not configured. Docker Compose by itself does not enforce the OpenShell policy.
 
 HiddenLayer provides runtime model-interaction scanning. The repository contains prior benign and adversarial scan outputs, but the runtime gate is authoritative because event credentials can expire. HiddenLayer complements OpenShell: HiddenLayer analyzes content; OpenShell constrains what the process can access or send.
 
@@ -398,6 +398,12 @@ cp .env.example .env
 
 Open `http://127.0.0.1:8080` in a browser. Do not commit `.env` because it contains credentials.
 
+The public hackathon deployment is
+<https://austin-floodops-gedeon-tona-us-dev.apps.rm1.0a51.p1.openshiftapps.com>.
+Anonymous visitors are read-only. The shared demo email is `gedeon@aitx.com`;
+the password is distributed separately and must never be spoken, recorded, or
+committed.
+
 The minimum real model setup is an NVIDIA key in either `NVIDIA_API_KEY` or `NVIDIA_INFERENCE_API_KEY`, a base address, and a configurable Nemotron model name. Public National Weather Service and United States Geological Survey data do not require paid keys, but the National Weather Service expects a descriptive user-agent string.
 
 To enable secured Kafka, configure broker addresses, topic, security protocol, authentication mechanism, username, and password. The current code supports the Python Kafka client. Use the probe and confirm both publish and consume before claiming a round trip.
@@ -408,11 +414,11 @@ To enable the fail-closed six-boundary HiddenLayer path, supply the current soft
 
 To enable WebEOC, an authorized emergency-management administrator must provide a service account, position, incident, board, and input view. Do not invent or scrape those values.
 
-For containers, the Dockerfile packages the FastAPI app. Docker Compose starts the app and a local Redpanda broker. That is convenient development infrastructure. For the sponsor security story, run the application through the actual NemoClaw and OpenShell sandbox and apply the repository policy.
+For containers, the Dockerfile packages the FastAPI app. Docker Compose starts the app and a local Redpanda broker. Red Hat OpenShift runs the public FastAPI pod and a separate Redpanda pod, each with persistent storage. OpenShift Secrets inject server credentials, anonymous users are read-only, and the demo login issues a supervisor token held only in browser memory. The NemoClaw and OpenShell proof remains a separate sandbox run and must not be described as the boundary around the OpenShift pod.
 
 ## Chapter 18 — A complete demonstration flow
 
-Start by saying: “Austin FloodOps does not predict rain from scratch and does not autonomously command responders. It converts fragmented official evidence into an explainable, human-approved operational recommendation.”
+Open the public OpenShift address, sign in with the presenter-provided demo account, and start by saying: “Austin FloodOps does not predict rain from scratch and does not autonomously command responders. It converts fragmented official evidence into an explainable, human-approved operational recommendation.”
 
 Press Inject gage rise plus warning. Explain that the page has loaded two warning records and three gage observations from a deterministic replay. Point to provenance identifiers. Explain that the transparent simulator combines alert strength and water signal, producing a screening score, while the model produces a separate structured recommendation.
 
@@ -422,7 +428,7 @@ Press Approve reversible action. Immediately say: “Approval changed the policy
 
 Press Refresh recent audit and Verify chain. Explain the previous-hash relationship and the difference between tamper-evident and tamper-proof.
 
-Press Run adversarial payload. Explain that HiddenLayer detects content threats while OpenShell limits file, process, inference, and network access. Show the quarantine result.
+Press Run adversarial payload and show the HiddenLayer quarantine result. Explain that the repository's separate NemoClaw and OpenShell run limits file, process, inference, and network access, but the public OpenShift pod currently reports that sandbox as not configured. Do not imply the page's quarantine result came from OpenShell.
 
 Press Run learning evaluation. Explain that it is a deterministic harness proving the feedback-and-retrieval mechanism, not a scientific accuracy claim.
 
@@ -458,6 +464,6 @@ Official and local sources create observations. Adapters normalize them. The hea
 
 Its most defensible innovation is not a claim that artificial intelligence can foresee every flood. It is the combination of live evidence, transparent calculation, secure model reasoning, human authority, responder interoperability, and auditability in one demonstration.
 
-Its most important limitations are equally clear: the simulation is not hydraulic, prediction is a short straight-line extrapolation, some optional live adapters may be degraded, replay freshness differs from live freshness, resource assignment uses a demo inventory, offline mode is not FirstNet integration, role enforcement is disabled by default, and responder delivery is not authorized merely because code exists.
+Its most important limitations are equally clear: the simulation is not hydraulic, prediction is a short straight-line extrapolation, some optional live adapters may be degraded, replay freshness differs from live freshness, resource assignment uses a demo inventory, offline mode is not FirstNet integration, role enforcement is disabled only in the default local developer configuration but enabled in the public deployment, and responder delivery is not authorized merely because code exists.
 
 Knowing both halves—the working architecture and its boundaries—is what will let you present the project like an expert.
