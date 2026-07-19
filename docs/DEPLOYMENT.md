@@ -63,6 +63,8 @@ The script stores only a keyed SHA-256 password digest in OpenShift; the indepen
 
 Use the hackathon Supabase credit for the existing hosted project, database storage, application programming interface traffic, logs, and backups. The service-role key remains only in the OpenShift Secret and is never sent to browser JavaScript. Supabase is the remote mirror; the OpenShift persistent volume keeps the application ledger available during a Supabase outage.
 
+The Red Hat Developer Sandbox resolver may return no address for a valid project-specific Supabase hostname. The deployment script therefore resolves the current public IPv4 records on the deploy machine and adds only that Supabase hostname to the application pod's host aliases. Transport Layer Security still verifies the Supabase hostname. The records are refreshed on every deployment; set `OPENSHIFT_SUPABASE_DNS_FALLBACK=false` when the cluster resolver works normally.
+
 ## Other deployment options
 
 - **Render free web service:** easiest fallback for the FastAPI container, but it sleeps after 15 minutes without inbound traffic and has an ephemeral filesystem. That breaks the always-on heartbeat unless a paid instance and external durable store are used.

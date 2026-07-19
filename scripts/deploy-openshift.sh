@@ -25,6 +25,54 @@ test -n "$PROJECT" || {
   exit 1
 }
 
+configure_supabase_dns_fallback() {
+  # The Red Hat Developer Sandbox resolver can occasionally return NXDOMAIN
+  # for a valid project-specific Supabase hostname even while other public
+  # names resolve normally. Pin the current public A records into the pod's
+  # /etc/hosts file on every deployment. TLS still validates the Supabase
+  # hostname; only name resolution is bypassed. Set the toggle to false when
+  # the cluster resolver handles the project hostname normally.
+  if [[ "${OPENSHIFT_SUPABASE_DNS_FALLBACK:-true}" == "false" ]]; then
+    return
+  fi
+  command -v dig >/dev/null 2>&1 || {
+    echo "Skipping optional Supabase DNS fallback because dig is unavailable."
+    return
+  }
+
+  SUPABASE_DEPLOY_URL=$(sed -n 's/^SUPABASE_URL=//p' .env | tail -1)
+  SUPABASE_DEPLOY_URL=${SUPABASE_DEPLOY_URL%\"}
+  SUPABASE_DEPLOY_URL=${SUPABASE_DEPLOY_URL#\"}
+  SUPABASE_DEPLOY_HOST=${SUPABASE_DEPLOY_URL#*://}
+  SUPABASE_DEPLOY_HOST=${SUPABASE_DEPLOY_HOST%%/*}
+  if [[ ! "$SUPABASE_DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
+    echo "Skipping optional Supabase DNS fallback because SUPABASE_URL has no valid hostname."
+    unset SUPABASE_DEPLOY_URL SUPABASE_DEPLOY_HOST
+    return
+  fi
+
+  SUPABASE_DEPLOY_IPS=$(dig +short A "$SUPABASE_DEPLOY_HOST" | awk '/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/' | head -2)
+  SUPABASE_DEPLOY_IP_PRIMARY=$(printf '%s\n' "$SUPABASE_DEPLOY_IPS" | sed -n '1p')
+  SUPABASE_DEPLOY_IP_SECONDARY=$(printf '%s\n' "$SUPABASE_DEPLOY_IPS" | sed -n '2p')
+  if [[ -z "$SUPABASE_DEPLOY_IP_PRIMARY" ]]; then
+    echo "Skipping optional Supabase DNS fallback because no public IPv4 address was found."
+    unset SUPABASE_DEPLOY_URL SUPABASE_DEPLOY_HOST SUPABASE_DEPLOY_IPS SUPABASE_DEPLOY_IP_PRIMARY SUPABASE_DEPLOY_IP_SECONDARY
+    return
+  fi
+
+  if [[ -n "$SUPABASE_DEPLOY_IP_SECONDARY" ]]; then
+    SUPABASE_HOST_ALIASES=$(printf '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"%s","hostnames":["%s"]},{"ip":"%s","hostnames":["%s"]}]}}}}' \
+      "$SUPABASE_DEPLOY_IP_PRIMARY" "$SUPABASE_DEPLOY_HOST" \
+      "$SUPABASE_DEPLOY_IP_SECONDARY" "$SUPABASE_DEPLOY_HOST")
+  else
+    SUPABASE_HOST_ALIASES=$(printf '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"%s","hostnames":["%s"]}]}}}}' \
+      "$SUPABASE_DEPLOY_IP_PRIMARY" "$SUPABASE_DEPLOY_HOST")
+  fi
+  oc patch deployment austin-floodops --type=merge -p "$SUPABASE_HOST_ALIASES" >/dev/null
+  echo "Configured the OpenShift Supabase DNS fallback for $SUPABASE_DEPLOY_HOST."
+  unset SUPABASE_DEPLOY_URL SUPABASE_DEPLOY_HOST SUPABASE_DEPLOY_IPS SUPABASE_DEPLOY_IP_PRIMARY SUPABASE_DEPLOY_IP_SECONDARY SUPABASE_HOST_ALIASES
+}
+
 echo "Deploying Austin FloodOps to OpenShift project: $PROJECT"
 
 # Values stay in the cluster Secret. The command never prints secret data and
@@ -57,6 +105,8 @@ fi
 
 oc process -f deploy/openshift-template.yaml \
   -p NAMESPACE="$PROJECT" | oc apply -f -
+
+configure_supabase_dns_fallback
 
 oc start-build austin-floodops --from-dir=. --follow --wait
 oc rollout status statefulset/redpanda --timeout=300s
