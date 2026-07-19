@@ -260,6 +260,10 @@ objects:
               args:
                 - redpanda
                 - start
+                # OpenShift runs containers with an arbitrary non-root UID. Keep
+                # Redpanda's generated config on the writable persistent volume
+                # instead of the read-only /etc/redpanda image directory.
+                - --config=/var/lib/redpanda/data/redpanda.yaml
                 - --kafka-addr=0.0.0.0:9092
                 - --advertise-kafka-addr=redpanda:9092
                 - --rpc-addr=0.0.0.0:33145
