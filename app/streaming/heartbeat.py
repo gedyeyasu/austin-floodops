@@ -8,6 +8,7 @@ from typing import Any
 from app.service import FloodOpsService
 
 logger = logging.getLogger("austin_floodops.heartbeat")
+CORE_SOURCES = frozenset({"nws", "usgs"})
 
 
 def _now() -> str:
@@ -60,9 +61,11 @@ class HeartbeatEngine:
         try:
             events, sources = await self.service.gather_live_with_status()
             degraded_sources = [name for name, result in sources.items() if result.get("status") != "ok"]
+            core_degraded = sorted(name for name in CORE_SOURCES if sources.get(name, {}).get("status") != "ok")
+            optional_degraded = sorted(name for name in degraded_sources if name not in CORE_SOURCES)
             new_events = self.service.store.filter_new_events(events)
             decision = None
-            error = f"Source degraded: {', '.join(degraded_sources)}" if degraded_sources else None
+            error = f"Core source degraded: {', '.join(core_degraded)}" if core_degraded else None
             if new_events:
                 _, decision, assessment_error = await self.service.assess_events(new_events, self.scenario_id)
                 if assessment_error:
@@ -84,6 +87,7 @@ class HeartbeatEngine:
                     "last_error": error,
                     "consecutive_failures": 0 if not error else int(previous.get("consecutive_failures", 0)) + 1,
                     "sources": sources,
+                    "source_warnings": optional_degraded,
                     "events_seen": len(events),
                     "new_events": len(new_events),
                     "decision_outcome": decision.policy_status if decision else "no_new_events",

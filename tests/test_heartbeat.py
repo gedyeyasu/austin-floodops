@@ -90,8 +90,28 @@ async def test_heartbeat_exposes_partial_source_failure(tmp_path, monkeypatch):
     state = await HeartbeatEngine(service).run_cycle()
     assert state["sources"]["nws"]["status"] == "degraded"
     assert state["sources"]["usgs"]["status"] == "ok"
-    assert state["last_error"] == "Source degraded: nws"
+    assert state["last_error"] == "Core source degraded: nws"
     assert state["consecutive_failures"] == 1
+
+
+@pytest.mark.asyncio
+async def test_optional_source_failure_is_warning_not_heartbeat_failure(tmp_path, monkeypatch):
+    local = replace(settings, db_path=tmp_path / "heartbeat.sqlite3", kafka_bootstrap_servers="", supabase_url="", supabase_service_role_key="")
+    service = FloodOpsService(local, Store(local.db_path))
+
+    async def gather_live_with_status():
+        return [], {
+            "nws": {"status": "ok", "events": 0},
+            "usgs": {"status": "ok", "events": 0},
+            "austin_roads": {"status": "degraded", "error": "HTTPStatusError"},
+        }
+
+    monkeypatch.setattr(service, "gather_live_with_status", gather_live_with_status)
+    state = await HeartbeatEngine(service).run_cycle()
+    assert state["last_error"] is None
+    assert state["last_success_at"]
+    assert state["consecutive_failures"] == 0
+    assert state["source_warnings"] == ["austin_roads"]
 
 
 @pytest.mark.asyncio
@@ -103,7 +123,7 @@ async def test_quiet_heartbeat_preserves_last_verified_stream_evidence(tmp_path,
     )
 
     async def gather_live_with_status():
-        return [], {"nws": {"status": "ok", "events": 0}}
+        return [], {"nws": {"status": "ok", "events": 0}, "usgs": {"status": "ok", "events": 0}}
 
     monkeypatch.setattr(service, "gather_live_with_status", gather_live_with_status)
     state = await HeartbeatEngine(service).run_cycle()

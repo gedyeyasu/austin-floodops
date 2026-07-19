@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import logging
 import secrets
 import uuid
 from contextlib import asynccontextmanager
@@ -29,6 +30,7 @@ from app.auth import Actor, Role, current_actor, require_action, require_role, c
 from app.prediction import predict_future
 
 service = FloodOpsService.create(settings)
+logger = logging.getLogger("austin_floodops.main")
 
 
 @asynccontextmanager
@@ -79,6 +81,7 @@ async def health() -> HealthResponse:
     supabase_probe_state = heartbeat.get("integration_supabase", {})
     osrm_probe_state = heartbeat.get("integration_osrm", {})
     latest_hiddenlayer = latest_security.get("hiddenlayer", {})
+    auth_probe_state = heartbeat.get("integration_auth", {})
     hiddenlayer_complete = set(latest_hiddenlayer.get("boundaries_scanned", [])) == {
         "ingested_content", "user_prompt_memory", "model_request", "tool_call", "tool_result", "final_answer"
     }
@@ -99,7 +102,7 @@ async def health() -> HealthResponse:
         {"name": "Austin road closures", "configured": True, "verified": sources.get("austin_roads", {}).get("status") == "ok", "detail": "data.austintexas.gov fw5i-n4te.json"},
         {"name": "Austin floodplain GeoJSON", "configured": True, "verified": False, "detail": "data.austintexas.gov 3p2e-ps67.json; no synthetic geometry"},
         {"name": "OSRM routing", "configured": settings.has_osrm, "verified": osrm_probe_state.get("status") == "verified", "detail": f"{settings.osrm_base_url} detour service; probe {osrm_probe_state.get('status', 'not run')}"},
-        {"name": "Role-based access control", "configured": settings.enable_rbac and settings.has_secure_auth, "verified": False, "detail": "Disabled by default; enabling it requires independent JWT and bootstrap secrets of at least 32 characters"},
+        {"name": "Role-based access control", "configured": settings.enable_rbac and settings.has_secure_auth, "verified": auth_probe_state.get("status") == "verified", "detail": f"JWT authorization and public viewer boundary; latest login {auth_probe_state.get('status', 'not run')}"},
         {"name": "Application audit chain", "configured": settings.enable_audit_chain, "verified": bool(audit_state["verified"] and audit_state["total_entries"]), "detail": f"{audit_state['total_entries']} local entries; not an external compliance certification"},
         {"name": "Heuristic prediction", "configured": settings.enable_prediction, "verified": False, "detail": "Linear gage projection; run /api/predict and review assumptions"},
     ]
@@ -172,6 +175,14 @@ async def demo_login(req: DemoLoginRequest) -> dict:
         actor_role=role.value,
         payload={"authentication": "demo_email_password", "expires_minutes": expires_minutes},
     )
+    try:
+        service.store.save_heartbeat_state(
+            {"integration_auth": {"status": "verified", "method": "demo_email_password", "role": role.value}}
+        )
+    except Exception as exc:
+        # Authentication must not fail merely because optional health telemetry
+        # cannot be recorded; the audit helper follows the same best-effort rule.
+        logger.warning("Demo login health telemetry failed: %s", exc)
     return {
         "access_token": token,
         "token_type": "bearer",
