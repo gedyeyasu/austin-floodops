@@ -203,7 +203,7 @@ async def evaluate_interaction_v2(
     except Exception as exc:
         if _is_authentication_failure(exc):
             raise HiddenLayerUnavailable(
-                "HiddenLayer authentication failed. Rotate the client ID and client secret; hackathon credentials expire after 72 hours."
+                "HiddenLayer is temporarily unavailable. Security verification could not be completed, so this assessment was blocked."
             ) from exc
         # If SDK fails, try to extract if it's a detection that should block
         err_str = str(exc).lower()
