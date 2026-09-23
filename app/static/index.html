@@ -162,6 +162,7 @@
       .top-actions button { padding-inline: 9px; }
     }
   </style>
+  <link rel="stylesheet" href="/static/incident-areas.css">
 </head>
 <body>
   <header class="topbar">
@@ -301,6 +302,13 @@
             <button onclick="renderMap()">Refresh map from events</button>
           </div>
           <div id="map-status" class="status-line">Map not initialized.</div>
+          <div id="incident-area-controls">
+            <h3>Incident planning areas</h3>
+            <p>Save a planning boundary by drawing or uploading GeoJSON. Planning records do not dispatch resources.</p>
+            <div class="area-toolbar"><button id="create-area" class="primary">+ Create incident area</button><button id="refresh-areas">Refresh saved areas</button></div>
+            <p id="workspace-status" role="status">Ready to create an area.</p>
+            <div class="area-columns"><section><h3>Saved areas</h3><ul id="area-list"></ul></section><section><h3>Selected area</h3><div id="selected-area">No area selected.</div></section></div>
+          </div>
         </section>
 
         <section class="panel" aria-labelledby="prediction-title">
@@ -1726,5 +1734,17 @@
     // Also refresh learning panel initially
     setTimeout(()=>{ refreshLearning(); loadResources(); loadTexasData(); checkServiceWorker(); }, 1000);
   </script>
+  <dialog id="area-dialog" aria-labelledby="dialog-title">
+    <form id="area-form">
+      <div class="dialog-heading"><div><p class="eyebrow">NEW PLANNING BOUNDARY</p><h2 id="dialog-title">Create incident area</h2></div><button type="button" id="close-area" aria-label="Close dialog">×</button></div>
+      <label for="area-name">Area name</label><input id="area-name" maxlength="100" required placeholder="e.g. East Austin crossing watch">
+      <div class="tabs" aria-label="Boundary input"><button type="button" id="draw-mode" aria-pressed="true">Draw on map</button><button type="button" id="upload-mode" aria-pressed="false">Upload GeoJSON</button></div>
+      <section id="draw-pane"><p class="hint">Click at least three points to draw a boundary. Drawing uses a local coordinate grid; no map tiles are required.</p><div id="area-map" aria-label="Planning boundary map"></div><div class="map-tools"><span id="point-count">0 vertices</span><button type="button" id="clear-boundary">Clear boundary</button></div></section>
+      <section id="upload-pane" hidden><label for="area-file">GeoJSON file</label><input id="area-file" type="file" accept=".json,.geojson,application/json"><label for="area-json">Or paste a Polygon / Polygon Feature</label><textarea id="area-json" rows="7" placeholder='{"type":"Polygon","coordinates":[...]}'></textarea><button type="button" id="load-sample">Use sample Austin boundary</button><p class="hint">One exterior ring, no holes. Exercise data only.</p></section>
+      <p id="map-progress" class="progress" role="status">Preparing map…</p><p id="form-error" role="alert"></p>
+      <footer><button type="button" id="cancel-area">Cancel</button><button id="save-area" type="submit" class="primary">Save area</button></footer>
+    </form>
+  </dialog>
+  <script src="/static/incident-areas.js"></script>
 </body>
 </html>

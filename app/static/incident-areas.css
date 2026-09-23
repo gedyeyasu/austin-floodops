@@ -1,0 +1,28 @@
+/* Scoped to the incident-area controls; original dashboard styles remain intact. */
+#incident-area-controls{margin-top:18px;border-top:1px solid var(--line);padding-top:18px}
+#incident-area-controls .area-toolbar{display:flex;flex-wrap:wrap;gap:8px}
+#incident-area-controls .area-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+#incident-area-controls .area-columns>section{min-width:0}
+#incident-area-controls ul{list-style:none;padding:0}
+#incident-area-controls li{margin:8px 0}
+#incident-area-controls li button{width:100%;text-align:left}
+#incident-area-controls [aria-pressed=true]{border-color:var(--green)}
+#selected-area pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+#area-dialog{width:min(900px,calc(100vw - 32px));max-height:calc(100dvh - 40px);padding:0;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--text);overflow:auto}
+#area-dialog::backdrop{background:#000a}
+#area-form{padding:24px}
+#area-dialog .dialog-heading{display:flex;align-items:start;justify-content:space-between;gap:16px}
+#area-dialog .eyebrow{font:11px var(--mono);letter-spacing:.12em;color:var(--muted)}
+#area-dialog label{display:block;margin:12px 0 6px}
+#area-dialog input,#area-dialog textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:3px;background:var(--bg);color:var(--text);font:inherit}
+#area-dialog .tabs,#area-dialog .map-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 0}
+#area-dialog .tabs [aria-pressed=true]{border-color:var(--green);color:var(--green)}
+#area-map{height:300px;border:1px solid var(--line);background:#12231a}
+#area-dialog .map-tools{justify-content:space-between}
+#area-dialog .hint{font-size:13px;color:var(--muted)}
+#area-dialog .progress{color:var(--green);min-height:24px}
+#form-error{color:var(--red)}
+#area-dialog footer{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;border-top:1px solid var(--line);padding-top:18px}
+#area-dialog .coordinate-tile{background:#13251c;color:#9aafa3;border:1px solid #294637;font:11px var(--mono);padding:8px}
+#area-dialog [hidden]{display:none!important}
+@media(max-width:650px){#incident-area-controls .area-columns{grid-template-columns:1fr}#area-form{padding:16px}#area-map{height:240px}}

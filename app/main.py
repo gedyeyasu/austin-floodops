@@ -893,6 +893,10 @@ async def webeoc_preview(incident_id: str, actor: Actor = Depends(require_action
     }
 
 
+from app.exercise_areas import router as exercise_areas_router
+app.include_router(exercise_areas_router)
+
+
 # Mount static dir for all other assets (leaflet, etc) - must be after specific routes
 try:
     from fastapi.staticfiles import StaticFiles
